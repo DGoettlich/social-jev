@@ -36,7 +36,7 @@ pass_filenames = false
 [[repos.hooks]]
 id = "vulture"
 name = "vulture"
-entry = "uv run --frozen vulture src tests ci pipelines --min-confidence 80"
+entry = "uv run --frozen vulture src tests ci --min-confidence 80"
 language = "system"
 pass_filenames = false
 always_run = true

@@ -1,10 +1,12 @@
 [project]
-name = "repo-template"
+name = "social-jev"
 version = "0.1.0"
-description = "Add your description here"
+description = "LM-head inference for social science text classification"
+license = "MIT"
+license-files = ["LICENSE"]
 readme = "README.md"
-requires-python = ">=3.11"
-dependencies = []
+requires-python = ">=3.12"
+dependencies = ["torch>=2.13", "transformers>=5.17,<6", "pydantic>=2"]
 
 [dependency-groups]
 dev = [
@@ -107,3 +109,6 @@ source_paths = ["src", "ci"]
 pytest_add_cli_args = ["--no-cov", "-p", "no:randomly"]
 # protect explicit local incremental runs when dependencies change
 on_dependency_change = "rerun"
+
+[tool.setuptools.package-data]
+social_jev = ["py.typed", "templates/*.jinja"]
