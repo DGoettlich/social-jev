@@ -10,9 +10,11 @@ if TYPE_CHECKING:
 
 
 def block_mask(ranges):
+    """Build a FlexAttention block mask from allowed token ranges."""
     batch, length = ranges.shape[:2]
 
     def allowed(b, _h, q, k):
+        """Return whether a query token may attend to a key token."""
         valid = (q < length) & (k < length)
         bounds = ranges[b, q.clamp(max=length - 1)]
         return valid & (
@@ -41,9 +43,22 @@ def message_spans(boundaries, roles, answer_length):
 
 
 class Positions:
+    """Compute logical token positions for isolated queries and options.
+
+    Args:
+        batch: Padded tokens and their message boundaries.
+        answer_length: Number of tokens in each appended answer prefix.
+
+    Examples:
+        >>> positions = Positions(batch, answer_length=2)  # doctest: +SKIP
+        >>> positions.value.shape == batch.input_ids.shape  # doctest: +SKIP
+        True
+    """
+
     def __init__(  # noqa: C901 -- One branch per message role.
         self, batch: "Batch", *, answer_length: int = 0
     ):
+        """Build logical positions for all tokens in the batch."""
         positions = []
         for boundaries, roles in zip(batch.message_boundaries, batch.roles, strict=True):
             sequence = []
@@ -73,9 +88,21 @@ class Positions:
 
 
 class AttentionMask:
+    """Compute causal visibility within documents, queries, and candidate answers.
+
+    Args:
+        batch: Padded tokens and their message boundaries.
+        answer_length: Number of tokens in each appended answer prefix.
+
+    Examples:
+        >>> mask = AttentionMask(batch, answer_length=2)  # doctest: +SKIP
+        >>> block_mask = mask.value  # doctest: +SKIP
+    """
+
     def __init__(  # noqa: C901 -- One branch per message role.
         self, batch: "Batch", *, answer_length: int = 0
     ):
+        """Build the visibility mask for all tokens in the batch."""
         batch_size, length = batch.input_ids.shape
         tokens = torch.arange(length)
         ranges = torch.zeros((batch_size, length, 3, 2), dtype=torch.int32)

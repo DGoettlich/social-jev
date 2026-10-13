@@ -1,4 +1,4 @@
-"""Hugging Face configuration for all SocialJev decision heads."""
+"""Hugging Face configuration for SocialJev LM-head inference."""
 
 from string import ascii_uppercase
 from typing import ClassVar
@@ -7,8 +7,26 @@ from transformers import AutoConfig, PretrainedConfig
 
 
 class SocialJevConfig(PretrainedConfig):
+    """Hugging Face configuration for an LM-head SocialJev checkpoint.
+
+    Args:
+        backbone_config: Backbone configuration object or serialized configuration.
+        decision_head: Saved head configuration; only lm_head is supported.
+        option_codes: Single-token answer codes assigned to candidate options.
+        role_start: Special token starting a message.
+        role_end: Special token ending a message.
+        **kwargs: Additional Hugging Face configuration settings.
+
+    Examples:
+        >>> config = SocialJevConfig(option_codes="ABC")
+        >>> config.decision_head["type"]
+        'lm_head'
+    """
+
     model_type = "social_jev"
+    """Hugging Face identifier for the SocialJev architecture."""
     sub_configs: ClassVar = {"backbone_config": AutoConfig}
+    """Configuration types used by the nested backbone."""
 
     def __init__(
         self,
@@ -19,6 +37,7 @@ class SocialJevConfig(PretrainedConfig):
         role_end="<|im_end|>",
         **kwargs,
     ):
+        """Initialize the backbone, message delimiters, and answer codes."""
         kwargs.pop("tie_word_embeddings", None)
         super().__init__(**kwargs)
         self.tie_word_embeddings = False
