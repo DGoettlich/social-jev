@@ -3,9 +3,8 @@
 SocialJev is a Jev-like classification foundation model for the social sciences,
 inspired by TypeSafe Jev. It is trained to combine the flexibility of modern
 language models pretrained on trillions of tokens of text with the speed of
-traditional lightweight NLP methods. Describe your classification task through
-questions and candidate answers, then code documents in batches through a simple
-Python interface.
+traditional lightweight NLP methods. Define your task through a simple typed
+interface and SocialJev returns typed outputs.
 
 ## Getting started
 
@@ -51,6 +50,3 @@ Example result:
 
 Results follow document order, with one result per query. The probabilities above
 are illustrative.
-
-*Release preparation: PyPI publication is pending, and `<model-name>` will be
-replaced with the released Hugging Face checkpoint.*
