@@ -6,6 +6,10 @@ language models pretrained on trillions of tokens of text with the speed of
 traditional lightweight NLP methods. Define your task through a simple typed
 interface and SocialJev returns typed outputs.
 
+**Note**
+SocialJev is under active development. The API and model interfaces may change,
+including breaking changes between releases.
+
 ## Getting started
 
 ```bash
