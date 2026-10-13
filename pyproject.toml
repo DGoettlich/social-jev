@@ -1,7 +1,7 @@
 [project]
 name = "social-jev"
 version = "0.1.0"
-description = "LM-head inference for social science text classification"
+description = "Jev-like classification foundation models for the social sciences"
 license = "MIT"
 license-files = ["LICENSE"]
 readme = "README.md"
