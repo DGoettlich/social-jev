@@ -17,7 +17,7 @@ Load a model from Hugging Face and classify a batch of documents:
 ```python
 from social_jev import Query, Request, SocialJev
 
-model = SocialJev.from_pretrained("social-jev/<model-name>")
+model = SocialJev.from_pretrained("social-jev/social-jev-0.6B-v1")
 
 query = Query(
     text="Which policy area does this document concern?",
