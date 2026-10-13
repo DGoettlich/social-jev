@@ -1,0 +1,8 @@
+# keep shell scripts usable on unix hosts
+*.sh text eol=lf
+
+# show meaningful python context in git diffs
+*.py diff=python
+
+# collapse generated dependency details on github
+uv.lock linguist-generated=true

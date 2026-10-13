@@ -1,0 +1,106 @@
+[[repos]]
+repo = "https://github.com/astral-sh/ruff-pre-commit"
+rev = "v0.16.7"
+
+[[repos.hooks]]
+id = "ruff-check"
+args = ["--fix"]
+
+[[repos.hooks]]
+id = "ruff-format"
+
+[[repos]]
+repo = "local"
+
+[[repos.hooks]]
+id = "deptry"
+name = "deptry"
+entry = "uv run --frozen deptry ."
+language = "system"
+pass_filenames = false
+
+[[repos.hooks]]
+id = "ty"
+name = "ty"
+entry = "uv run --frozen ty check"
+language = "system"
+pass_filenames = false
+
+[[repos.hooks]]
+id = "pytest"
+name = "pytest"
+entry = "uv run --frozen python -m pytest"
+language = "system"
+pass_filenames = false
+
+[[repos.hooks]]
+id = "vulture"
+name = "vulture"
+entry = "uv run --frozen vulture src tests ci pipelines --min-confidence 80"
+language = "system"
+pass_filenames = false
+always_run = true
+
+[[repos.hooks]]
+id = "test-quality"
+name = "test quality"
+entry = "uv run --frozen python ci/check_tests.py tests"
+language = "system"
+pass_filenames = false
+always_run = true
+verbose = true
+
+[[repos.hooks]]
+id = "mutmut"
+name = "mutation testing"
+entry = "uv run --frozen mutmut run --max-children 2"
+language = "system"
+pass_filenames = false
+always_run = true
+stages = ["manual"]
+
+
+[[repos.hooks]]
+id = "actionlint"
+name = "actionlint"
+entry = "uv run --frozen actionlint"
+language = "system"
+files = '^\.github/workflows/[^/]+\.ya?ml$'
+
+[[repos.hooks]]
+id = "zizmor"
+name = "zizmor"
+entry = "uv run --frozen zizmor --offline"
+language = "system"
+files = '^\.github/workflows/[^/]+\.ya?ml$'
+
+[[repos.hooks]]
+id = "shellcheck"
+name = "shellcheck"
+entry = "uv run --frozen shellcheck"
+language = "system"
+types = ["shell"]
+
+[[repos.hooks]]
+id = "shell-locations"
+name = "shell script locations"
+language = "fail"
+entry = "shell scripts must live under scripts/ or containers/; move this file."
+files = '\.sh$'
+exclude = '^(scripts|containers)/'
+
+[[repos.hooks]]
+id = "config-locations"
+name = "configuration file locations"
+language = "fail"
+entry = "move TOML into config/ or containers/, and YAML into config/, unless it is an explicitly allowed tool configuration."
+files = '\.(toml|ya?ml)$'
+exclude = '^(config/|containers/.*\.toml$|pyproject\.toml$|prek\.toml$|ruff\.toml$|\.github/workflows/[^/]+\.ya?ml$)'
+
+[[repos.hooks]]
+id = "layout"
+name = "layout"
+language = "fail"
+entry = "move this file into an allowed top-level folder."
+files = '/'
+exclude = '^(src|tests|ci|config|assets|pipelines|scripts|containers|reports|docs|\.github)/'

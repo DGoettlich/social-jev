@@ -1,0 +1,361 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      mutation_pr:
+        description: PR requesting mutation testing
+        type: string
+        required: true
+      mutation_revision:
+        description: Requested PR revision (set by the comment dispatcher)
+        type: string
+        required: true
+      fresh_mutations:
+        description: Run mutation testing without reusing results
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Lints (ruff)
+            hooks: ruff-check ruff-format
+          - name: Typing (ty)
+            hooks: ty
+          - name: Deps (deptry)
+            hooks: deptry
+          - name: Dead code (vulture)
+            hooks: vulture
+          - name: Workflows (ci)
+            hooks: actionlint zizmor
+          - name: Shell (shellcheck)
+            hooks: shellcheck
+          - name: Layout (ci)
+            hooks: shell-locations config-locations layout
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          python-version: '3.11'
+          enable-cache: true
+      - run: uv sync --locked --group dev
+      - run: uv run --frozen prek run ${{ matrix.hooks }} --all-files
+
+  test_quality:
+    name: Test quality (ci)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: test-quality-comment-${{ github.event.pull_request.number || inputs.mutation_pr || github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          python-version: '3.11'
+          enable-cache: true
+      - run: uv sync --locked --group dev
+      - name: Check test quality
+        id: scan
+        env:
+          TEST_QUALITY_REPORT: ${{ runner.temp }}/test-quality.md
+        run: uv run --frozen prek run test-quality --all-files
+      - name: Update PR test-quality comment
+        if: >-
+          !cancelled() && contains(fromJSON('["success", "failure"]'), steps.scan.outcome) &&
+          ((github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) ||
+           github.event_name == 'workflow_dispatch')
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          REPORT_PATH: ${{ runner.temp }}/test-quality.md
+          PR_NUMBER: ${{ github.event.pull_request.number || inputs.mutation_pr }}
+          TESTED_REVISION: ${{ github.event.pull_request.head.sha || inputs.mutation_revision }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            if (context.eventName === 'workflow_dispatch' && context.sha !== process.env.TESTED_REVISION) return;
+            const issue = {...context.repo, issue_number: Number(process.env.PR_NUMBER)};
+            const {data: pr} = await github.rest.pulls.get({...context.repo, pull_number: issue.issue_number});
+            if (pr.state !== 'open' || pr.head.sha !== process.env.TESTED_REVISION ||
+                pr.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`) return;
+            const marker = '<!-- test-quality-report -->';
+            const comments = await github.paginate(github.rest.issues.listComments, {...issue, per_page: 100});
+            const previous = comments.find(comment => comment.user?.login === 'github-actions[bot]' &&
+              comment.body?.startsWith(marker));
+            const number = Number(process.env.GITHUB_RUN_NUMBER);
+            const attempt = Number(process.env.GITHUB_RUN_ATTEMPT);
+            const prior = previous?.body.match(/<!-- run: (\d+); attempt: (\d+) -->/);
+            if (prior && (Number(prior[1]) > number ||
+                (Number(prior[1]) === number && Number(prior[2]) > attempt))) return;
+            const path = process.env.REPORT_PATH;
+            if (!fs.existsSync(path)) throw new Error('Test-quality report was not produced; see the scan logs');
+            if (fs.statSync(path).size > 200000) throw new Error('Test-quality report is too large');
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = `${marker}\n<!-- run: ${number}; attempt: ${attempt} -->\n` +
+              fs.readFileSync(path, 'utf8') + `\n📋 [Tested version and logs](${run})`;
+            if (body.length > 60000) throw new Error('Test-quality comment is too large');
+            if (previous) await github.rest.issues.updateComment({...context.repo, comment_id: previous.id, body});
+            else await github.rest.issues.createComment({...issue, body});
+
+  test:
+    name: Tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      - name: Install dependencies with uv
+        run: uv sync --locked --group dev
+
+      - name: Run tests
+        run: uv run --frozen prek run pytest --all-files
+
+  mutation:
+    name: Tests (mutmut)
+    needs: [quality, test_quality, test]
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+    concurrency:
+      group: mutmut-comment-${{ inputs.mutation_pr }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Validate mutation request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ci/check_mutmut/request.py
+      # dispatched workflow checks are not attached to the PR; publish its check explicitly
+      - name: Start PR mutation check
+        id: check
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const {data: check} = await github.rest.checks.create({
+              ...context.repo, name: 'Tests (mutmut)', head_sha: context.sha,
+              status: 'in_progress',
+              details_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              output: {title: 'Mutation testing requested', summary: 'Testing the requested PR version.'},
+            });
+            return check.id;
+      - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          python-version: '3.11'
+          enable-cache: true
+      - run: uv sync --locked --group dev
+
+      - name: Identify execution inputs
+        id: inputs
+        run: |
+          uv run --frozen python - <<'PY'
+          import hashlib
+          import os
+          import platform
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          from ci.check_mutmut.report import MUTATION_PATHS
+
+          tracked = subprocess.check_output(['git', 'ls-files', '--stage', '-z', '--', *MUTATION_PATHS])
+          # index entries include file names and modes, so renames invalidate results too
+          environment = (sys.version, platform.platform(), platform.machine())
+          identity = hashlib.sha256(tracked + repr(environment).encode()).hexdigest()
+          print(f'::add-mask::{identity}')
+          with Path(os.environ['GITHUB_OUTPUT']).open('a') as output:
+              output.write(f'key=mutmut-v1-{identity}\n')
+          PY
+
+      - uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        id: cache
+        if: '!inputs.fresh_mutations'
+        with:
+          path: mutation-report
+          key: ${{ steps.inputs.outputs.key }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: ${{ steps.inputs.outputs.key }}-
+
+      - name: Validate cached report
+        id: reuse
+        if: steps.cache.outputs.cache-matched-key != ''
+        continue-on-error: true
+        env:
+          MUTATION_REUSE: 'true'
+          CACHE_KEY: ${{ steps.inputs.outputs.key }}
+        run: |
+          test "$(cat mutation-report/cache-key)" = "$CACHE_KEY"
+          uv run --frozen python ci/check_mutmut/report.py
+
+      - name: Run mutation testing
+        id: mutation
+        if: steps.reuse.outcome != 'success'
+        timeout-minutes: 60
+        shell: bash
+        run: |
+          mkdir -p mutation-report
+          uv run --frozen prek run mutmut --stage manual --all-files --verbose 2>&1 | tee mutation-report/run.txt
+
+      - name: Finalize mutation report
+        id: report
+        if: always() && contains(fromJSON('["success", "failure", "cancelled"]'), steps.mutation.outcome)
+        env:
+          MUTATION_OUTCOME: ${{ steps.mutation.outcome }}
+        run: uv run --frozen python ci/check_mutmut/report.py
+
+      - name: Record cache compatibility
+        if: steps.report.outcome == 'success'
+        env:
+          CACHE_KEY: ${{ steps.inputs.outputs.key }}
+        run: printf '%s\n' "$CACHE_KEY" > mutation-report/cache-key
+
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        if: steps.report.outcome == 'success'
+        with:
+          path: mutation-report
+          key: ${{ steps.inputs.outputs.key }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Show mutation report
+        if: always() && (steps.reuse.outcome == 'success' || steps.report.outcome != 'skipped')
+        run: cat mutation-report/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        id: artifact
+        if: always() && (steps.reuse.outcome == 'success' || steps.report.outcome != 'skipped')
+        with:
+          name: mutation-report
+          path: |
+            mutation-report/report.json
+            mutation-report/summary.md
+            mutation-report/tool-output.txt
+            mutation-report/run.txt
+          if-no-files-found: error
+
+      - name: Update PR mutation comment
+        if: >-
+          always() && !cancelled() && steps.artifact.outcome == 'success'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+          MUTATION_PR: ${{ inputs.mutation_pr }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const file = 'mutation-report/report.json';
+            if (fs.statSync(file).size > 1000000) throw new Error('Mutation report is too large');
+            const report = JSON.parse(fs.readFileSync(file, 'utf8'));
+            const categories = ['killed', 'survived', 'no_tests', 'skipped', 'suspicious',
+              'timeout', 'check_was_interrupted_by_user', 'segfault', 'not_checked'];
+            const validCounts = report.counts &&
+              Object.keys(report.counts).sort().join() === [...categories, 'total'].sort().join() &&
+              Object.values(report.counts).every(value => Number.isSafeInteger(value) && value >= 0) &&
+              categories.reduce((sum, key) => sum + report.counts[key], 0) === report.counts.total;
+            const validStatus = ['complete', 'incomplete', 'failed'].includes(report.status);
+            const validComplete = report.status !== 'complete' || (validCounts &&
+              ['suspicious', 'timeout', 'check_was_interrupted_by_user', 'segfault', 'not_checked']
+                .every(key => report.counts[key] === 0));
+            const runPrefix = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/`;
+            if (report.version !== 2 || typeof report.reused !== 'boolean' || !validStatus ||
+                !validComplete || (report.counts !== null && !validCounts) ||
+                typeof report.producer !== 'string' || !report.producer.startsWith(runPrefix) ||
+                !/^\d+$/.test(report.producer.slice(runPrefix.length)) ||
+                !Array.isArray(report.survivors) ||
+                report.survivors.length !== Math.min(report.counts?.survived ?? 0, 20) ||
+                !report.survivors.every(item => item && typeof item.name === 'string' && item.name.trim().length > 0 && item.name.length <= 500 &&
+                  typeof item.diff === 'string' && item.diff.trim().length > 0 && item.diff.length <= 4000)) {
+              throw new Error('Invalid mutation report');
+            }
+            const issue = {...context.repo, issue_number: Number(process.env.MUTATION_PR)};
+            const {data: pr} = await github.rest.pulls.get({...context.repo, pull_number: issue.issue_number});
+            if (pr.state !== 'open' || pr.head.sha !== context.sha ||
+                pr.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+              core.info('Skipping a result for an outdated or closed PR');
+              return;
+            }
+            const marker = '<!-- mutmut-report -->';
+            const comments = await github.paginate(github.rest.issues.listComments, {...issue, per_page: 100});
+            const previous = comments.find(comment => comment.user?.login === 'github-actions[bot]' &&
+              comment.body?.startsWith(marker));
+            const number = Number(process.env.GITHUB_RUN_NUMBER);
+            const attempt = Number(process.env.GITHUB_RUN_ATTEMPT);
+            const prior = previous?.body.match(/<!-- run: (\d+); attempt: (\d+) -->/);
+            if (prior && (Number(prior[1]) > number ||
+                (Number(prior[1]) === number && Number(prior[2]) > attempt))) return;
+            const escape = value => value.replace(/[&<>"'@]/g, char =>
+              ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '@': '&#64;'}[char]));
+            const state = {complete: '🟢 Completed', incomplete: '🟡 Incomplete', failed: '🔴 Failed'};
+            const counts = report.counts;
+            const overview = counts === null ? 'Counts unavailable. See the logs for the failure.' :
+              '| Caught by tests | Survived | No tests | Total |\n| ---: | ---: | ---: | ---: |\n' +
+              `| ${counts.killed} | ${counts.survived} | ${counts.no_tests} | ${counts.total} |\n\n` +
+              '<sub>Survivors and missing tests are advisory.</sub>';
+            const previews = [];
+            let previewSize = 0;
+            for (const {name, diff} of report.survivors) {
+              const title = name.replace('.x_', '.').replace('__mutmut_', ' · mutation ');
+              // source text may contain markdown fences; use a longer fence to keep it literal
+              const fence = '`'.repeat(Math.max(3, ...[...diff.matchAll(/`+/g)].map(match => match[0].length + 1)));
+              const preview = `<details>\n<summary><code>${escape(title)}</code></summary>\n\n` +
+                `${fence}diff\n${diff}\n${fence}\n\n</details>\n\n`;
+              if (previewSize + preview.length > 45000) break;
+              previews.push(preview);
+              previewSize += preview.length;
+            }
+            const survivors = previews.length === 0 ? '' :
+              `<details>\n<summary>Surviving mutations — showing ${previews.length} of ${counts.survived}</summary>\n\n` +
+              previews.join('') + '<sub>Full captured diffs are in the downloadable report.</sub>\n\n</details>\n\n';
+            const details = counts === null ? '' : Object.entries(counts)
+              .map(([key, value]) => `| ${key.replaceAll('_', ' ')} | ${value} |`).join('\n');
+            const body = `${marker}\n<!-- run: ${number}; attempt: ${attempt} -->\n` +
+              `## 🧬 Mutation testing\n\n${state[report.status]}${report.reused ? ' · ♻️ Reused result' : ''}\n\n` +
+              `${overview}\n\n${survivors}<details>\n<summary>Execution details</summary>\n\n` +
+              (details ? `| Outcome | Count |\n| --- | ---: |\n${details}\n\n` : '') +
+              `[Producing run](${report.producer}) · [Download full report](${process.env.ARTIFACT_URL})\n\n</details>\n\n` +
+              `📋 [Tested version, logs and artifacts](${runPrefix}${context.runId})`;
+            if (previous) await github.rest.issues.updateComment({...context.repo, comment_id: previous.id, body});
+            else await github.rest.issues.createComment({...issue, body});
+
+      - name: Complete PR mutation check
+        if: always() && steps.check.outcome == 'success'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          CHECK_ID: ${{ steps.check.outputs.result }}
+          RESULT: ${{ job.status }}
+        with:
+          script: |
+            await github.rest.checks.update({
+              ...context.repo, check_run_id: Number(process.env.CHECK_ID),
+              status: 'completed', conclusion: process.env.RESULT,
+              output: {title: `Mutation testing ${process.env.RESULT}`,
+                summary: 'See the workflow run and PR report for mutation results.'},
+            });

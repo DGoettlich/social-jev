@@ -1,0 +1,109 @@
+[project]
+name = "repo-template"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "actionlint-py>=1.7.12.24",
+    "deptry>=0.25.1",
+    "mutmut>=3.7.0",
+    "prek>=0.5.2",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "pytest-randomly>=5.0.0",
+    "ruff>=0.16.7",
+    "shellcheck-py>=0.11.0.1",
+    "ty>=0.0.80",
+    "vulture>=2.16",
+    "zizmor>=1.30.1",
+]
+
+[project.scripts]
+
+[build-system]
+requires = ["setuptools>=84.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = [
+    "--strict-config",
+    "--strict-markers",
+    "--cov=src",
+    "--cov=ci",
+    "--cov-branch",
+    "--cov-report=term-missing",
+    "--cov-fail-under=80",
+]
+xfail_strict = true
+filterwarnings = ["error"]
+
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+extend-select = [
+    "A",      # Prevent shadowing Python built-ins
+    "ARG",    # Unused function arguments
+    "B",      # Bug-prone Python patterns
+    "C4",     # Better comprehensions
+    "C90",    # McCabe complexity
+    "E",      # pycodestyle errors
+    "ERA",    # Commented-out code
+    "F",      # Pyflakes, including stricter import checks
+    "N",      # PEP 8 naming conventions
+    "PERF",   # Performance anti-patterns
+    "PGH003", # Require specific type: ignore codes
+    "PGH004", # Require specific noqa codes
+    "PL",     # Pylint-derived code quality checks
+    "PT",     # Pytest-specific checks
+    "PTH",    # Prefer pathlib
+    "RET",    # Cleaner return control flow
+    "RUF",    # Ruff-specific correctness/style checks
+    "SIM",    # Simplify unnecessarily complex constructs
+    "TC",     # Type-checking import hygiene
+    "TRY",    # Exception-handling structure
+    "UP013",  # Modern TypedDict syntax
+    "UP015",  # Remove redundant open() modes
+    "UP042",  # Prefer StrEnum
+    "W",      # pycodestyle warnings
+]
+
+# These conflict with, or are redundant with, `ruff format`.
+ignore = [
+    "E111",
+    "E114",
+    "E117",
+    "W191",
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 6
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "PLR2004", # Literal values are normal and useful in assertions
+]
+
+[tool.check-tests]
+fail = ["TST001", "TST002", "TST003", "TST004", "TST005"]
+warn = []
+
+[tool.mutmut]
+source_paths = ["src", "ci"]
+# mutation subsets must not fail whole-project coverage or vary their execution order
+pytest_add_cli_args = ["--no-cov", "-p", "no:randomly"]
+# protect explicit local incremental runs when dependencies change
+on_dependency_change = "rerun"

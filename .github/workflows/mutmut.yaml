@@ -1,0 +1,27 @@
+name: Mutation request
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  request:
+    if: github.event.issue.pull_request && contains(github.event.comment.body, '/mutmut')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+      pull-requests: write
+    steps:
+      # the privileged listener only loads code from the default branch
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Request mutation testing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 ci/check_mutmut/request.py
