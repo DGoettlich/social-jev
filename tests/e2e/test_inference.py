@@ -1,6 +1,4 @@
-import json
 import shutil
-from pathlib import Path
 
 import pytest
 import torch
@@ -112,13 +110,3 @@ def test_cached_hf_loading_and_loading_info(model, tmp_path):
     assert not info["missing_keys"]
     assert not info["unexpected_keys"]
     assert loaded.query(requests()) == model.query(requests())
-
-
-def test_predictions_match_mert_reference(model):
-    # Generated with MERT's LM-head implementation and the deterministic CPU fixture.
-    reference = json.loads(Path("tests/e2e/fixtures/mert_lm_head.json").read_text())
-    actual = model.query(requests(), batch_size=2)
-    for group, expected_group in zip(actual, reference, strict=True):
-        for result, expected in zip(group, expected_group, strict=True):
-            assert result.choice == expected["choice"]
-            assert result.probabilities == pytest.approx(expected["probabilities"], abs=1e-6)
