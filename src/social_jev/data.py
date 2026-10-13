@@ -22,6 +22,17 @@ if TYPE_CHECKING:
 class Sample:
     messages: list[dict[str, Any]]
 
+    @classmethod
+    def from_request(cls, request: Request) -> Sample:
+        messages: list[dict[str, Any]] = [{"role": "state", "content": request.state}]
+        for query in request.queries:
+            messages.append({"role": "query", "content": query.text})
+            messages.extend(
+                {"role": "example", "content": example.model_dump()} for example in query.examples
+            )
+            messages.extend({"role": "option", "content": option} for option in query.options)
+        return cls(messages)
+
 
 @dataclass
 class TokenizedSample:
@@ -29,12 +40,58 @@ class TokenizedSample:
     message_boundaries: list[int]
     roles: list[str]
 
+    @classmethod
+    def from_sample(cls, sample: Sample, processor: Processor) -> TokenizedSample:
+        config = processor.config
+        ids = cast(
+            "list[int]",
+            processor.tokenizer.apply_chat_template(
+                sample.messages,
+                role_start=config.role_start,
+                role_end=config.role_end,
+                option_codes=config.option_codes,
+                tokenize=True,
+                return_dict=False,
+                add_generation_prompt=False,
+            ),
+        )
+        roles = [message["role"] for message in sample.messages]
+        closings = iter(i for i, token in enumerate(ids) if token == processor.end_id)
+        boundaries = []
+        for index, role in enumerate(roles):
+            if role == "example":
+                next(closings)
+                next(closings)
+            boundary = next(closings)
+            if role == "option" and (index + 1 == len(roles) or roles[index + 1] != "option"):
+                end = boundary + 1 + len(processor.answer_ids)
+                if ids[boundary + 1 : end] != processor.answer_ids:
+                    message = "Tokenizer template must append the LM-head answer prefix"
+                    raise ValueError(message)
+                boundary = end - 1
+            boundaries.append(boundary)
+        if len(ids) > config.backbone_config.max_position_embeddings:
+            message = "Request exceeds model context capacity"
+            raise ValueError(message)
+        return cls(ids, boundaries, roles)
+
+    def pad(self, length: int, pad_id: int) -> TokenizedSample:
+        return replace(self, ids=self.ids + [pad_id] * (length - len(self.ids)))
+
 
 @dataclass
 class Batch:
     input_ids: torch.Tensor
     message_boundaries: list[list[int]]
     roles: list[list[str]]
+
+    @classmethod
+    def from_samples(cls, samples: list[TokenizedSample]) -> Batch:
+        return cls(
+            torch.tensor([sample.ids for sample in samples], dtype=torch.long),
+            [sample.message_boundaries for sample in samples],
+            [sample.roles for sample in samples],
+        )
 
     def to(self, device: torch.device | str) -> Batch:
         return replace(self, input_ids=self.input_ids.to(device))
@@ -94,14 +151,7 @@ class FormatStep(Step[Sample]):
         request = self.parent.next()
         if request is None:
             return None
-        messages: list[dict[str, Any]] = [{"role": "state", "content": request.state}]
-        for query in request.queries:
-            messages.append({"role": "query", "content": query.text})
-            messages.extend(
-                {"role": "example", "content": example.model_dump()} for example in query.examples
-            )
-            messages.extend({"role": "option", "content": option} for option in query.options)
-        return Sample(messages)
+        return Sample.from_request(request)
 
 
 class TokenizeStep(Step[TokenizedSample]):
@@ -113,42 +163,7 @@ class TokenizeStep(Step[TokenizedSample]):
         sample = self.parent.next()
         if sample is None:
             return None
-        return self.tokenize(sample)
-
-    def tokenize(self, sample: Sample) -> TokenizedSample:
-        processor = self.processor
-        config = processor.config
-        ids = cast(
-            "list[int]",
-            processor.tokenizer.apply_chat_template(
-                sample.messages,
-                role_start=config.role_start,
-                role_end=config.role_end,
-                option_codes=config.option_codes,
-                tokenize=True,
-                return_dict=False,
-                add_generation_prompt=False,
-            ),
-        )
-        roles = [message["role"] for message in sample.messages]
-        closings = iter(i for i, token in enumerate(ids) if token == processor.end_id)
-        boundaries = []
-        for index, role in enumerate(roles):
-            if role == "example":
-                next(closings)
-                next(closings)
-            boundary = next(closings)
-            if role == "option" and (index + 1 == len(roles) or roles[index + 1] != "option"):
-                end = boundary + 1 + len(processor.answer_ids)
-                if ids[boundary + 1 : end] != processor.answer_ids:
-                    message = "Tokenizer template must append the LM-head answer prefix"
-                    raise ValueError(message)
-                boundary = end - 1
-            boundaries.append(boundary)
-        if len(ids) > config.backbone_config.max_position_embeddings:
-            message = "Request exceeds model context capacity"
-            raise ValueError(message)
-        return TokenizedSample(ids, boundaries, roles)
+        return TokenizedSample.from_sample(sample, self.processor)
 
 
 class PadStep(Step[list[TokenizedSample]]):
@@ -165,10 +180,7 @@ class PadStep(Step[list[TokenizedSample]]):
         if not samples:
             return None
         length = max(len(sample.ids) for sample in samples)
-        return [
-            replace(sample, ids=sample.ids + [self.pad_id] * (length - len(sample.ids)))
-            for sample in samples
-        ]
+        return [sample.pad(length, self.pad_id) for sample in samples]
 
 
 class CollateStep(Step[Batch]):
@@ -179,11 +191,7 @@ class CollateStep(Step[Batch]):
         samples = self.parent.next()
         if samples is None:
             return None
-        return Batch(
-            torch.tensor([sample.ids for sample in samples], dtype=torch.long),
-            [sample.message_boundaries for sample in samples],
-            [sample.roles for sample in samples],
-        )
+        return Batch.from_samples(samples)
 
 
 class Processor:

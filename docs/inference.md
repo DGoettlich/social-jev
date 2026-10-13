@@ -27,6 +27,11 @@ counts documents. An empty request list returns an empty result list.
 call `.next()` until it returns `None`. Internally both interfaces use
 `RequestStep → FormatStep → TokenizeStep → PadStep → CollateStep`.
 
+Dataclasses own the transformations: `Sample.from_request()` formats messages,
+`TokenizedSample.from_sample()` tokenizes them, `TokenizedSample.pad()` pads tokens,
+and `Batch.from_samples()` builds CPU tensors. Steps only pull inputs, arrange
+batches, and call these methods; `Processor` assembles the chain.
+
 Load a complete SocialJev LM-head HF export, including its tokenizer and saved
 chat template. Other decision heads and plain causal-LM checkpoints are not
 supported. The saved template remains authoritative; `Processor.template()`
