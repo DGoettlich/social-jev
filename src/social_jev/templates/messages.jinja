@@ -1,0 +1,24 @@
+{%- set option_codes = option_codes|default('ABCDEFGHIJKLMNOPQRSTUVWXYZ') %}
+{%- set role_start = role_start|default('<|im_start|>') %}
+{%- set role_end = role_end|default('<|im_end|>') %}
+{%- set counter = namespace(option=0) %}
+{%- for message in messages %}
+{%- if message.role == 'query' %}{%- set counter.option = 0 %}{%- endif %}
+{{- role_start + message.role + '\n' }}
+{%- if message.role == 'example' %}
+{{- role_start + 'state\n' + message.content.state + role_end }}
+{{- role_start + 'option\n' + message.content.choice + role_end }}
+{%- elif message.role == 'option' %}
+{%- if counter.option >= option_codes|length %}
+{{- raise_exception('More options than available letter codes') }}
+{%- endif %}
+{{- option_codes[counter.option] + ': ' + message.content }}
+{%- set counter.option = counter.option + 1 %}
+{%- else %}
+{{- message.content }}
+{%- endif %}
+{{- role_end }}
+{%- if message.role == 'option' and (loop.last or messages[loop.index].role != 'option') %}
+{{- role_start + 'answer\n' }}
+{%- endif %}
+{%- endfor %}

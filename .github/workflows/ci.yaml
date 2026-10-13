@@ -50,7 +50,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           enable-cache: true
       - run: uv sync --locked --group dev
       - run: uv run --frozen prek run ${{ matrix.hooks }} --all-files
@@ -70,7 +70,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           enable-cache: true
       - run: uv sync --locked --group dev
       - name: Check test quality
@@ -127,7 +127,7 @@ jobs:
       - name: Install uv and Python
         uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
         with:
-          python-version: "3.11"
+          python-version: "3.12"
           enable-cache: true
 
       - name: Install dependencies with uv
@@ -172,7 +172,7 @@ jobs:
             return check.id;
       - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           enable-cache: true
       - run: uv sync --locked --group dev
 
