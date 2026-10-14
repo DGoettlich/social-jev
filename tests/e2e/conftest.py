@@ -39,12 +39,12 @@ def checkpoint(tmp_path):
     tokenizer.save_pretrained(tmp_path)
     config = SocialJevConfig(
         vocab_size=len(words),
-        hidden_size=16,
-        intermediate_size=32,
+        hidden_size=128,
+        intermediate_size=256,
         num_hidden_layers=1,
         num_attention_heads=2,
         num_key_value_heads=2,
-        head_dim=8,
+        head_dim=64,
         max_position_embeddings=256,
         pad_token_id=0,
     )
