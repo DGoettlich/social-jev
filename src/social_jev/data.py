@@ -1,362 +1,282 @@
-"""Pull-based inference preparation, exposed through Processor."""
+"""Dataclass transformations exposed through a pull-based Processor chain."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from importlib.resources import files
-from itertools import islice
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 
 import torch
 
-from .types import Request
+from .types import Request, Result
 
 if TYPE_CHECKING:
-    from transformers import PreTrainedTokenizerBase
+    from collections.abc import Iterator
 
-    from .config import SocialJevConfig
+    from transformers import PreTrainedTokenizerBase
 
 
 @dataclass
 class Sample:
-    """Formatted request messages before tokenization."""
+    """A complete request represented as role-tagged messages."""
 
-    messages: list[dict[str, Any]]
-    """Role-tagged messages in request order."""
+    messages: list[dict[str, str]]
+    """Document, questions, and options in their original order."""
 
     @classmethod
     def from_request(cls, request: Request) -> Sample:
-        """Format a typed request into role-tagged messages."""
-        messages: list[dict[str, Any]] = [{"role": "state", "content": request.state}]
+        """Format a complete typed request into messages."""
+        messages = [{"role": "state", "content": request.state}]
         for query in request.queries:
             messages.append({"role": "query", "content": query.text})
-            messages.extend(
-                {"role": "example", "content": example.model_dump()} for example in query.examples
-            )
             messages.extend({"role": "option", "content": option} for option in query.options)
         return cls(messages)
 
 
 @dataclass
 class TokenizedSample:
-    """Tokenized request with message boundaries and roles."""
+    """A tokenized request with message boundaries and roles."""
 
     ids: list[int]
-    """Token IDs in message order."""
+    """Token IDs for the complete request."""
     message_boundaries: list[int]
-    """Inclusive final token index of each message."""
+    """Inclusive terminal token index of each message, matching mert."""
     roles: list[str]
-    """Message roles aligned with message boundaries."""
+    """Message roles aligned with their token boundaries."""
 
     @classmethod
-    def from_sample(cls, sample: Sample, processor: Processor) -> TokenizedSample:
-        """Tokenize formatted messages and record their boundaries and roles."""
-        config = processor.config
+    def from_sample(cls, sample: Sample, tokenizer: PreTrainedTokenizerBase) -> TokenizedSample:
+        """Apply the checkpoint template once to the complete message list."""
         ids = cast(
             "list[int]",
-            processor.tokenizer.apply_chat_template(
+            tokenizer.apply_chat_template(
                 sample.messages,
-                role_start=config.role_start,
-                role_end=config.role_end,
-                option_codes=config.option_codes,
                 tokenize=True,
                 return_dict=False,
-                add_generation_prompt=False,
             ),
         )
+        end_id = tokenizer.convert_tokens_to_ids("<|im_end|>")
+        boundaries = [index for index, token in enumerate(ids) if token == end_id]
         roles = [message["role"] for message in sample.messages]
-        closings = iter(i for i, token in enumerate(ids) if token == processor.end_id)
-        boundaries = []
-        for index, role in enumerate(roles):
-            if role == "example":
-                next(closings)
-                next(closings)
-            boundary = next(closings)
-            if role == "option" and (index + 1 == len(roles) or roles[index + 1] != "option"):
-                end = boundary + 1 + len(processor.answer_ids)
-                if ids[boundary + 1 : end] != processor.answer_ids:
-                    message = "Tokenizer template must append the LM-head answer prefix"
-                    raise ValueError(message)
-                boundary = end - 1
-            boundaries.append(boundary)
-        if len(ids) > config.backbone_config.max_position_embeddings:
-            message = "Request exceeds model context capacity"
+        if len(boundaries) != len(roles) or not boundaries or boundaries[-1] != len(ids) - 1:
+            message = "Checkpoint template must terminate each message with <|im_end|>"
             raise ValueError(message)
         return cls(ids, boundaries, roles)
 
-    def pad(self, length: int, pad_id: int) -> TokenizedSample:
-        """Return a copy padded to the requested token length."""
-        return replace(self, ids=self.ids + [pad_id] * (length - len(self.ids)))
+    def __len__(self) -> int:
+        """Return the number of tokens."""
+        return len(self.ids)
+
+    def __getitem__(self, selection: slice) -> TokenizedSample:
+        """Slice messages while preserving mert's token offsets and boundaries."""
+        start, stop, _ = selection.indices(len(self.roles))
+        stop = max(start, stop)
+        offsets = [0, *(end + 1 for end in self.message_boundaries)]
+        token_start, token_stop = offsets[start], offsets[stop]
+        return TokenizedSample(
+            ids=self.ids[token_start:token_stop],
+            message_boundaries=[end - token_start for end in self.message_boundaries[start:stop]],
+            roles=self.roles[start:stop],
+        )
+
+    def __add__(self, other: TokenizedSample) -> TokenizedSample:
+        """Concatenate messages and adjust boundaries by the existing token length."""
+        return TokenizedSample(
+            ids=self.ids + other.ids,
+            message_boundaries=self.message_boundaries
+            + [end + len(self) for end in other.message_boundaries],
+            roles=self.roles + other.roles,
+        )
+
+    def split(self) -> Iterator[TokenizedSample]:
+        """Extract one document-question-option sequence per candidate."""
+        state = self[:1]
+        query = None
+        for index, role in enumerate(self.roles):
+            if role == "query":
+                query = self[index : index + 1]
+            elif role == "option":
+                assert query is not None
+                yield state + query + self[index : index + 1]
 
 
 @dataclass
 class Batch:
-    """Padded CPU token tensors and aligned message metadata."""
+    """Padded candidate tensors for offline Transformers execution."""
 
     input_ids: torch.Tensor
-    """Padded token IDs with shape (documents, tokens)."""
-    message_boundaries: list[list[int]]
-    """Inclusive message end indices for each document."""
-    roles: list[list[str]]
-    """Message roles for each document, aligned with its boundaries."""
+    """Candidate token IDs with right padding."""
+    attention_mask: torch.Tensor
+    """One for real tokens and zero for padding."""
 
     @classmethod
-    def from_samples(cls, samples: list[TokenizedSample]) -> Batch:
-        """Collate padded samples into a CPU batch."""
+    def from_inputs(cls, inputs: list[list[int]], pad_id: int) -> Batch:
+        """Pad candidate sequences to the longest input in this submission."""
+        length = max(map(len, inputs))
         return cls(
-            torch.tensor([sample.ids for sample in samples], dtype=torch.long),
-            [sample.message_boundaries for sample in samples],
-            [sample.roles for sample in samples],
+            torch.tensor([ids + [pad_id] * (length - len(ids)) for ids in inputs]),
+            torch.tensor([[1] * len(ids) + [0] * (length - len(ids)) for ids in inputs]),
         )
 
-    def to(self, device: torch.device | str) -> Batch:
-        """Return a copy with token tensors transferred to the requested device."""
-        return replace(self, input_ids=self.input_ids.to(device))
+    def to(self, device) -> Batch:
+        """Transfer padded candidate tensors to the backbone input device."""
+        return replace(
+            self, input_ids=self.input_ids.to(device), attention_mask=self.attention_mask.to(device)
+        )
 
-    @property
-    def option_positions(self) -> torch.Tensor:
-        """Return the batch row and final token index of every option message."""
-        return torch.tensor(
-            [
-                (row, end)
-                for row, (boundaries, roles) in enumerate(
-                    zip(self.message_boundaries, self.roles, strict=True)
+
+@dataclass
+class Encoded:
+    """Candidate inputs and their document/question output grouping."""
+
+    inputs: list[list[int]]
+    """Unpadded candidate sequences in document, question, and option order."""
+    requests: list[Request]
+    """Original requests used to reconstruct nested results."""
+
+    def results(self, scores: list[float]) -> list[list[Result]]:
+        """Normalize candidate logits within each question and restore document order."""
+        expected = sum(len(query.options) for item in self.requests for query in item.queries)
+        if len(scores) != expected:
+            message = "Engine returned a different number of candidate scores"
+            raise ValueError(message)
+        rows = iter(scores)
+        documents = []
+        for request in self.requests:
+            answers = []
+            for query in request.queries:
+                logits = torch.tensor([next(rows) for _ in query.options], dtype=torch.float32)
+                probabilities = logits.softmax(0)
+                answers.append(
+                    Result(
+                        choice=query.options[int(probabilities.argmax())],
+                        probabilities=dict(zip(query.options, probabilities.tolist(), strict=True)),
+                    )
                 )
-                for end, role in zip(boundaries, roles, strict=True)
-                if role == "option"
-            ],
-            dtype=torch.long,
-            device=self.input_ids.device,
-        )
-
-    @property
-    def option_indices(self) -> torch.Tensor:
-        """Group option indices by query, using -1 for unavailable candidates."""
-        groups: list[list[int]] = []
-        index = 0
-        for roles in self.roles:
-            for role in roles:
-                if role == "query":
-                    groups.append([])
-                elif role == "option":
-                    groups[-1].append(index)
-                    index += 1
-        width = max(map(len, groups))
-        return torch.tensor(
-            [group + [-1] * (width - len(group)) for group in groups],
-            dtype=torch.long,
-            device=self.input_ids.device,
-        )
+            documents.append(answers)
+        return documents
 
 
 class Step[T](ABC):
-    """Define the pull-based interface shared by inference pipeline stages.
+    """Pull items from a preparation stage.
 
     Examples:
-        >>> source = RequestStep([])
-        >>> isinstance(source, Step)
-        True
-        >>> source.next() is None
+        >>> FormatStep([]).next() is None
         True
     """
 
     @abstractmethod
     def next(self) -> T | None:
-        """Pull the next item, or return None when the upstream source is exhausted."""
+        """Return the next item, or None when exhausted."""
         ...
 
 
-class RequestStep(Step[Request]):
-    """Read typed requests in their original order.
+class FormatStep(Step[Sample]):
+    """Pull requests and delegate message formatting to Sample.
 
     Args:
-        requests: Documents and queries to pass through the pipeline.
+        requests: Documents to classify in output order.
 
     Examples:
-        >>> source = RequestStep([])
-        >>> source.next() is None
+        >>> FormatStep([]).next() is None
         True
     """
 
     def __init__(self, requests: list[Request]):
-        """Initialize the ordered request source."""
+        """Initialize this call's request cursor."""
         self.requests = iter(requests)
 
-    def next(self) -> Request | None:
-        """Pull the next item, or return None when the upstream source is exhausted."""
-        return next(self.requests, None)
-
-
-class FormatStep(Step[Sample]):
-    """Orchestrate conversion of requests into formatted samples.
-
-    Args:
-        parent: Source of typed requests.
-
-    Examples:
-        >>> formatted = FormatStep(RequestStep([]))
-        >>> formatted.next() is None
-        True
-    """
-
-    def __init__(self, parent: Step[Request]):
-        """Attach the request source to the formatting stage."""
-        self.parent = parent
-
     def next(self) -> Sample | None:
-        """Pull the next item, or return None when the upstream source is exhausted."""
-        request = self.parent.next()
-        if request is None:
-            return None
-        return Sample.from_request(request)
+        """Format the next complete request."""
+        request = next(self.requests, None)
+        return None if request is None else Sample.from_request(request)
 
 
 class TokenizeStep(Step[TokenizedSample]):
-    """Orchestrate tokenization of formatted samples.
+    """Delegate candidate tokenization to TokenizedSample.
 
     Args:
-        parent: Source of formatted samples.
-        processor: Tokenizer and checkpoint settings used for tokenization.
+        parent: Formatted question source.
+        tokenizer: Checkpoint tokenizer shared across calls.
 
     Examples:
-        >>> formatted = FormatStep(RequestStep([]))
-        >>> tokenized = TokenizeStep(formatted, processor)  # doctest: +SKIP
-        >>> tokenized.next() is None  # doctest: +SKIP
+        >>> isinstance(TokenizeStep, type)
         True
     """
 
-    def __init__(self, parent: Step[Sample], processor: Processor):
-        """Attach the sample source and tokenizer settings."""
+    def __init__(self, parent: Step[Sample], tokenizer: PreTrainedTokenizerBase):
+        """Attach the formatted source and tokenizer settings."""
         self.parent = parent
-        self.processor = processor
+        self.tokenizer = tokenizer
 
     def next(self) -> TokenizedSample | None:
-        """Pull the next item, or return None when the upstream source is exhausted."""
+        """Pull and tokenize the next question's candidates."""
         sample = self.parent.next()
         if sample is None:
             return None
-        return TokenizedSample.from_sample(sample, self.processor)
+        return TokenizedSample.from_sample(sample, self.tokenizer)
 
 
-class PadStep(Step[list[TokenizedSample]]):
-    """Collect requests and orchestrate padding to the group's longest sequence.
-
-    Args:
-        parent: Source of tokenized samples.
-        batch_size: Maximum number of documents per group.
-        pad_id: Token ID used for padding.
-
-    Examples:
-        >>> padded = PadStep(tokenized, batch_size=16, pad_id=0)  # doctest: +SKIP
-        >>> padded.next() is None  # doctest: +SKIP
-        True
-    """
-
-    def __init__(self, parent: Step[TokenizedSample], batch_size: int, pad_id: int):
-        """Configure the upstream source, batch size, and padding token."""
-        if batch_size < 1:
-            message = "batch_size must be positive"
-            raise ValueError(message)
-        self.parent = parent
-        self.batch_size = batch_size
-        self.pad_id = pad_id
-
-    def next(self) -> list[TokenizedSample] | None:
-        """Pull the next item, or return None when the upstream source is exhausted."""
-        samples = list(islice(iter(self.parent.next, None), self.batch_size))
-        if not samples:
-            return None
-        length = max(len(sample.ids) for sample in samples)
-        return [sample.pad(length, self.pad_id) for sample in samples]
-
-
-class CollateStep(Step[Batch]):
-    """Orchestrate construction of CPU batches from padded sample groups.
+class SplitStep(Step[TokenizedSample]):
+    """Delegate candidate extraction to TokenizedSample.split().
 
     Args:
-        parent: Source of padded sample groups.
+        parent: Tokenized complete-request source.
 
     Examples:
-        >>> batches = CollateStep(padded)  # doctest: +SKIP
-        >>> batch = batches.next()  # doctest: +SKIP
+        >>> step = SplitStep(parent)  # doctest: +SKIP
+        >>> candidate = step.next()  # doctest: +SKIP
     """
 
-    def __init__(self, parent: Step[list[TokenizedSample]]):
-        """Attach the padded sample source to the collator."""
+    def __init__(self, parent: Step[TokenizedSample]):
+        """Attach the source and initialize this call's pending candidates."""
         self.parent = parent
+        self.pending: Iterator[TokenizedSample] = iter(())
 
-    def next(self) -> Batch | None:
-        """Pull the next item, or return None when the upstream source is exhausted."""
-        samples = self.parent.next()
-        if samples is None:
-            return None
-        return Batch.from_samples(samples)
+    def next(self) -> TokenizedSample | None:
+        """Pull the next candidate, splitting a request when needed."""
+        while (candidate := next(self.pending, None)) is None:
+            sample = self.parent.next()
+            if sample is None:
+                return None
+            self.pending = iter(sample.split())
+        return candidate
 
 
 class Processor:
-    """Expose the pull-based request preparation chain.
+    """Expose synchronous preparation and result decoding.
 
     Args:
-        tokenizer: Tokenizer containing the checkpoint's chat template.
-        config: Model configuration defining message roles and option codes.
+        tokenizer: Checkpoint tokenizer with its trained chat template.
 
     Examples:
-        >>> from social_jev import Query, Request
-        >>> processor = Processor(tokenizer, config)  # doctest: +SKIP
-        >>> request = Request(state="The bus network expanded.", queries=[
-        ...     Query(text="Policy area?", options=["Transport", "Education"])
-        ... ])
-        >>> batch = processor.encode(request)  # doctest: +SKIP
-        >>> batch.input_ids.shape[0]  # doctest: +SKIP
-        1
+        >>> processor = Processor(tokenizer)  # doctest: +SKIP
+        >>> processor.decode([], processor.encode([]))  # doctest: +SKIP
+        []
     """
 
-    def __init__(self, tokenizer: PreTrainedTokenizerBase, config: SocialJevConfig):
-        """Initialize the tokenizer settings and validate single-token answer codes."""
+    def __init__(self, tokenizer: PreTrainedTokenizerBase):
+        """Store immutable preparation settings; each encode builds its own chain."""
         self.tokenizer = tokenizer
-        self.config = config
-        self.end_id = cast("int", tokenizer.convert_tokens_to_ids(config.role_end))
-        self.answer_ids = tokenizer.encode(config.role_start + "answer\n", add_special_tokens=False)
-        self.code_token_ids: list[int] = []
-        for code in config.option_codes:
-            encoded = tokenizer.encode(
-                config.role_start + "answer\n" + code, add_special_tokens=False
-            )
-            if encoded[:-1] != self.answer_ids or encoded[-1] == tokenizer.unk_token_id:
-                message = "Each option code must be one known answer token"
-                raise ValueError(message)
-            self.code_token_ids.append(encoded[-1])
-        if len(set(self.code_token_ids)) != len(self.code_token_ids):
-            message = "Option codes must have distinct token IDs"
-            raise ValueError(message)
 
     @staticmethod
     def template() -> str:
-        """Read the bundled LM-head chat template from package resources."""
+        """Read the bundled linear-head template used when exporting checkpoints."""
         return files("social_jev").joinpath("templates/messages.jinja").read_text()
 
-    def batches(self, requests: list[Request], *, batch_size: int = 16) -> CollateStep:
-        """Assemble a fresh pull-based chain that produces padded CPU batches."""
-        if any(
-            len(query.options) > len(self.code_token_ids)
-            for request in requests
-            for query in request.queries
-        ):
-            message = "Query has more options than available option codes"
-            raise ValueError(message)
-        source = RequestStep(requests)
-        formatted = FormatStep(source)
-        tokenized = TokenizeStep(formatted, self)
-        padded = PadStep(tokenized, batch_size, self.end_id)
-        return CollateStep(padded)
-
-    def encode(self, requests: Request | list[Request]) -> Batch:
-        """Encode all supplied requests into one padded CPU batch."""
+    def encode(self, requests: Request | list[Request]) -> Encoded:
+        """Run a fresh Step.next chain and collect unpadded candidate sequences."""
         items = [requests] if isinstance(requests, Request) else requests
-        if not items:
-            message = "encode requires at least one request"
-            raise ValueError(message)
-        batch = self.batches(items, batch_size=len(items)).next()
-        assert batch is not None
-        return batch
+        formatted = FormatStep(items)
+        tokenized = TokenizeStep(formatted, self.tokenizer)
+        split = SplitStep(tokenized)
+        inputs = []
+        while (sample := split.next()) is not None:
+            inputs.append(sample.ids)
+        return Encoded(inputs, items)
+
+    @staticmethod
+    def decode(scores: list[float], encoded: Encoded) -> list[list[Result]]:
+        """Delegate nested result reconstruction to the encoded dataclass."""
+        return encoded.results(scores)

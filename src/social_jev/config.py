@@ -1,60 +1,53 @@
-"""Hugging Face configuration for SocialJev LM-head inference."""
+"""Nested checkpoint configuration shared with mert exports."""
 
-from string import ascii_uppercase
+from dataclasses import asdict
 from typing import ClassVar
 
-from transformers import AutoConfig, PretrainedConfig
+from transformers import AutoConfig, PretrainedConfig, Qwen3Config
+
+from .head import DecisionHeadConfig
 
 
 class SocialJevConfig(PretrainedConfig):
-    """Hugging Face configuration for an LM-head SocialJev checkpoint.
+    """Keep backbone and trained scalar-head settings in separate nested configs.
 
     Args:
-        backbone_config: Backbone configuration object or serialized configuration.
-        decision_head: Saved head configuration; only lm_head is supported.
-        option_codes: Single-token answer codes assigned to candidate options.
-        role_start: Special token starting a message.
-        role_end: Special token ending a message.
-        **kwargs: Additional Hugging Face configuration settings.
+        backbone_config: Qwen3 configuration object or serialized configuration.
+        decision_head: Saved linear or MLP architecture settings.
+        **kwargs: Hugging Face checkpoint metadata.
 
     Examples:
-        >>> config = SocialJevConfig(option_codes="ABC")
-        >>> config.decision_head["type"]
-        'lm_head'
+        >>> config = SocialJevConfig(backbone_config={"model_type": "qwen3", "hidden_size": 16})
+        >>> config.backbone_config.hidden_size
+        16
     """
 
     model_type = "social_jev"
-    """Hugging Face identifier for the SocialJev architecture."""
+    """Architecture identifier preserved in mert exports."""
     sub_configs: ClassVar = {"backbone_config": AutoConfig}
     """Configuration types used by the nested backbone."""
 
-    def __init__(
-        self,
-        backbone_config=None,
-        decision_head=None,
-        option_codes=ascii_uppercase,
-        role_start="<|im_start|>",
-        role_end="<|im_end|>",
-        **kwargs,
-    ):
-        """Initialize the backbone, message delimiters, and answer codes."""
-        kwargs.pop("tie_word_embeddings", None)
-        super().__init__(**kwargs)
-        self.tie_word_embeddings = False
+    def __init__(self, backbone_config=None, decision_head=None, **kwargs):
+        """Load the nested backbone and scalar architecture without flattening."""
         if backbone_config is None:
             backbone_config = {"model_type": "qwen3"}
         if isinstance(backbone_config, dict):
             values = dict(backbone_config)
             backbone_config = AutoConfig.for_model(values.pop("model_type"), **values)
-        self.backbone_config = backbone_config
-        self.backbone_config.tie_word_embeddings = False
-        if decision_head is not None and decision_head.get("type") != "lm_head":
-            message = "Only lm_head checkpoints are supported"
+        if backbone_config.model_type != "qwen3":
+            message = "SocialJev currently supports Qwen3 backbones"
             raise ValueError(message)
-        self.decision_head = {"type": "lm_head", "dims": [], "activation": "gelu"}
-        self.option_codes = option_codes
-        self.role_start = role_start
-        self.role_end = role_end
+        assert isinstance(backbone_config, Qwen3Config)
+        self.backbone_config = backbone_config
+        super().__init__(**kwargs)
+        self.decision_head = asdict(DecisionHeadConfig(**(decision_head or {})))
+        self.tie_word_embeddings = False
+        self.backbone_config.tie_word_embeddings = False
+
+    def get_text_config(self, decoder=None, encoder=None):
+        """Expose the nested text configuration to HF and vLLM introspection."""
+        del decoder, encoder
+        return self.backbone_config
 
 
-SocialJevConfig.register_for_auto_class()
+AutoConfig.register("social_jev", SocialJevConfig)
