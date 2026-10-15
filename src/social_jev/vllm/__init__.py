@@ -1,17 +1,23 @@
 """Optional vLLM execution settings shared by offline and online inference."""
 
+from dataclasses import asdict, is_dataclass
+
 
 def engine_settings(**kwargs) -> dict:
-    """Forward execution options while fixing the method's causal pooling contract."""
-    settings = {"enable_prefix_caching": True, "gpu_memory_utilization": 0.8, **kwargs}
-    fixed = {
-        "runner": "pooling",
-        "hf_overrides": {"architectures": ["SocialJevPoolingModel"], "is_causal": True},
-        "pooler_config": {"seq_pooling_type": "LAST", "use_activation": False},
-        "enable_chunked_prefill": False,
+    """Combine caller settings with the required classification integration."""
+    settings = dict(kwargs)
+    settings["hf_overrides"] = {
+        **(settings.get("hf_overrides") or {}),
+        "architectures": ["SocialJevPoolingModel"],
+        "is_causal": True,
     }
-    if fixed.keys() & kwargs.keys():
-        message = "SocialJev owns the model architecture and causal pooling settings"
-        raise ValueError(message)
-    settings.update(fixed)
+    pooler = settings.get("pooler_config") or {}
+    if is_dataclass(pooler):
+        pooler = asdict(pooler)
+    settings["pooler_config"] = {
+        **pooler,
+        "seq_pooling_type": "LAST",
+        "use_activation": False,
+    }
+    settings["runner"] = "pooling"
     return settings

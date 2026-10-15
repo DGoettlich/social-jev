@@ -5,7 +5,7 @@ from transformers import PreTrainedTokenizerFast
 
 from social_jev import Processor
 from social_jev.config import SocialJevConfig
-from social_jev.transformers import ScalarModel
+from social_jev.transformers import SocialJevModel
 
 
 @pytest.fixture(
@@ -60,7 +60,7 @@ def checkpoint(tmp_path, request):
             "pad_token_id": 0,
         },
     )
-    model = ScalarModel(config)
+    model = SocialJevModel(config)
     with torch.no_grad():
         for index, parameter in enumerate(model.parameters()):
             values = torch.arange(parameter.numel(), dtype=torch.float32).reshape(parameter.shape)

@@ -117,7 +117,7 @@ def test_format_tokenize_split_runs_once_per_document(checkpoint, monkeypatch):
         model.stop()
 
 
-def test_transformers_loading_kwargs_reach_tokenizer_and_model(checkpoint):
+def test_transformers_loading_kwargs_reach_model(checkpoint):
     model = SocialJev.from_pretrained(checkpoint, dtype=torch.float64, local_files_only=True)
     try:
         assert model.engine.model.dtype == torch.float64

@@ -8,14 +8,14 @@ from .data import Batch
 from .head import DecisionHeadConfig, ScalarHead
 
 
-class ScalarModel(PreTrainedModel):
+class SocialJevModel(PreTrainedModel):
     """Load the backbone and scalar-head weights from a SocialJev checkpoint.
 
     Args:
         config: Qwen3 configuration for the scalar classifier.
 
     Examples:
-        >>> model = ScalarModel.from_pretrained(repo)  # doctest: +SKIP
+        >>> model = SocialJevModel.from_pretrained(repo)  # doctest: +SKIP
     """
 
     config_class = SocialJevConfig
@@ -49,26 +49,17 @@ class TransformersEngine:
 
     Args:
         repo: Self-contained checkpoint path or Hugging Face repository.
-        tokenizer: Checkpoint tokenizer used for padding.
 
     Examples:
-        >>> engine = TransformersEngine(repo, tokenizer)  # doctest: +SKIP
+        >>> engine = TransformersEngine(repo)  # doctest: +SKIP
         >>> engine.score([])  # doctest: +SKIP
         []
     """
 
-    def __init__(self, repo, tokenizer, **kwargs):
+    def __init__(self, repo, **kwargs):
         """Load the checkpoint using caller dtype and device-placement settings."""
-        model, loading = ScalarModel.from_pretrained(
-            repo, output_loading_info=True, **{"dtype": "auto", **kwargs}
-        )
-        if loading["missing_keys"] or loading["unexpected_keys"]:
-            message = "Checkpoint weights do not match the backbone and trained linear or MLP head"
-            raise ValueError(message)
-        self.model = model.eval()
-        self.pad_id = tokenizer.pad_token_id
-        if self.pad_id is None:
-            self.pad_id = tokenizer.eos_token_id
+        self.model = SocialJevModel.from_pretrained(repo, **kwargs).eval()
+        self.pad_id = self.model.config.backbone_config.pad_token_id
 
     @torch.inference_mode()
     def score(self, inputs: list[list[int]]) -> list[float]:

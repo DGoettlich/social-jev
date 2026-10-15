@@ -5,7 +5,6 @@ import importlib.util
 import json
 import os
 import signal
-import socket
 import subprocess
 import sys
 import threading
@@ -49,29 +48,32 @@ class Server:
         if importlib.util.find_spec("vllm") is None:
             message = 'Install the optional backend with uv pip install "social-jev[vllm]" on Linux'
             raise ImportError(message)
-        with socket.socket() as probe:
-            probe.bind(("127.0.0.1", 0))
-            port = probe.getsockname()[1]
-        self.url = f"http://127.0.0.1:{port}"
+        from vllm.entrypoints.launchers.cli_args import (  # noqa: PLC0415  # ty: ignore[unresolved-import]
+            make_arg_parser,
+        )
+        from vllm.utils.argparse_utils import (  # noqa: PLC0415  # ty: ignore[unresolved-import]
+            FlexibleArgumentParser,
+        )
+
+        settings = engine_settings(**kwargs)
+        settings["served_model_name"] = "social-jev"
+        arguments = [str(repo), *cli_arguments(settings)]
+        parsed = make_arg_parser(FlexibleArgumentParser()).parse_args(arguments)
+        host = parsed.host
+        if host in {None, "", "0.0.0.0"}:
+            host = "127.0.0.1"
+        elif host == "::":
+            host = "::1"
+        address = f"[{host}]" if ":" in host else host
+        self.url = f"http://{address}:{parsed.port}"
         command = [
             sys.executable,
             "-m",
             "vllm.entrypoints.cli.main",
             "serve",
-            str(repo),
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-            "--served-model-name",
-            "social-jev",
-            *cli_arguments(engine_settings(**kwargs)),
+            *arguments,
         ]
-        self.process = subprocess.Popen(
-            command,
-            start_new_session=True,
-            env={**os.environ, "VLLM_PLUGINS": "social_jev"},
-        )
+        self.process = subprocess.Popen(command, start_new_session=True)
         self.loop = asyncio.new_event_loop()
         self.thread = threading.Thread(target=self.loop.run_forever, daemon=True)
         self.thread.start()
@@ -85,9 +87,8 @@ class Server:
 
     def wait_ready(self):
         """Wait for model readiness while detecting startup failures."""
-        deadline = time.monotonic() + 300
         with httpx.Client(base_url=self.url, timeout=1) as probe:
-            while time.monotonic() < deadline:
+            while True:
                 if self.process.poll() is not None:
                     message = "vLLM exited during startup; see its server logs"
                     raise RuntimeError(message)
@@ -97,8 +98,6 @@ class Server:
                 except httpx.TransportError:
                     pass  # Connection refusal is expected while the model starts.
                 time.sleep(0.1)
-        message = "vLLM did not become ready within 300 seconds"
-        raise TimeoutError(message)
 
     async def connect(self):
         """Create the HTTP client on the loop that owns its connections."""
@@ -138,8 +137,4 @@ class Server:
             self.loop.close()
         if self.process.poll() is None:
             os.killpg(self.process.pid, signal.SIGTERM)
-            try:
-                self.process.wait(timeout=20)
-            except subprocess.TimeoutExpired:
-                os.killpg(self.process.pid, signal.SIGKILL)
-                self.process.wait()
+            self.process.wait()

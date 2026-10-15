@@ -4988,7 +4988,6 @@ name = "social-jev"
 version = "0.1.0a1"
 source = { editable = "." }
 dependencies = [
-    { name = "huggingface-hub" },
     { name = "pydantic" },
     { name = "torch" },
     { name = "transformers" },
@@ -5019,7 +5018,6 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "httpx", marker = "extra == 'vllm'" },
-    { name = "huggingface-hub", specifier = ">=1" },
     { name = "pydantic", specifier = ">=2" },
     { name = "torch", specifier = ">=2.13" },
     { name = "transformers", specifier = ">=5.17,<6" },

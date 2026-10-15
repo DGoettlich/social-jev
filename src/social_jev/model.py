@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from huggingface_hub import snapshot_download
 from transformers import AutoTokenizer
 
-from .config import SocialJevConfig
+from . import config  # noqa: F401 -- Register the checkpoint configuration before loading.
 from .data import Processor
 
 if TYPE_CHECKING:
@@ -46,49 +44,12 @@ class SocialJev:
         if backend not in {"transformers", "vllm"} or (serve and backend != "vllm"):
             message = "Choose transformers offline, vllm offline, or vllm with serve=True"
             raise ValueError(message)
-        loading = {
-            key: kwargs[key]
-            for key in (
-                "revision",
-                "token",
-                "cache_dir",
-                "local_files_only",
-                "force_download",
-                "subfolder",
-            )
-            if key in kwargs
-        }
-        if backend == "vllm":
-            if not Path(repo).is_dir():
-                subfolder = loading.get("subfolder", "")
-                download = {key: value for key, value in loading.items() if key != "subfolder"}
-                repo = str(
-                    Path(
-                        snapshot_download(
-                            str(repo),
-                            **download,
-                            allow_patterns=[
-                                "*.json",
-                                "*.safetensors",
-                                "*.jinja",
-                                "*.model",
-                                "*.txt",
-                            ],
-                        )
-                    )
-                    / subfolder
-                )
-            else:
-                repo = str(Path(repo) / loading.get("subfolder", ""))
-            kwargs = {key: value for key, value in kwargs.items() if key not in loading}
-            loading = {}
-        SocialJevConfig.from_pretrained(repo, **loading)
-        tokenizer = AutoTokenizer.from_pretrained(repo, **loading)
+        tokenizer = AutoTokenizer.from_pretrained(repo, revision=kwargs.get("revision"))
         processor = Processor(cast("PreTrainedTokenizerBase", tokenizer))
         if backend == "transformers":
             from .transformers import TransformersEngine  # noqa: PLC0415
 
-            engine = TransformersEngine(repo, processor.tokenizer, **kwargs)
+            engine = TransformersEngine(repo, **kwargs)
         elif serve:
             from .vllm.server import Server  # noqa: PLC0415
 

@@ -5,11 +5,9 @@ import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from transformers import AutoTokenizer
-
 from social_jev.transformers import TransformersEngine
 
-engine = TransformersEngine(sys.argv[1], AutoTokenizer.from_pretrained(sys.argv[1]))
+engine = TransformersEngine(sys.argv[1])
 lock = threading.Lock()
 
 
