@@ -52,6 +52,7 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.highlight:
       anchor_linenums: true
+      auto_title: true
 extra_css:
   - assets/stylesheets/theme.css
 extra_javascript:

@@ -11,7 +11,6 @@
               <option value="{{ config.extra.package_version }}">{{ config.extra.package_version }}</option>
             </select>
             <span id="version-status" role="status"></span>
-            <a href="https://social-jev.github.io/">← SocialJev project</a>
           </div>
           {% include "partials/nav.html" %}
         </div>
@@ -27,11 +26,3 @@
   {% endif %}
 {% endblock %}
 
-{% block header %}
-  {{ super() }}
-  <nav class="project-links" aria-label="Project links">
-    <a href="https://social-jev.github.io/">Project</a>
-    <a href="https://huggingface.co/social-jev/social-jev-0.6B-preview">Hugging Face</a>
-    <a href="https://pypi.org/project/social-jev/">PyPI</a>
-  </nav>
-{% endblock %}
