@@ -14,19 +14,37 @@ from http import HTTPStatus
 
 import httpx
 
+from . import engine_settings
+
+
+def cli_arguments(settings: dict) -> list[str]:
+    """Translate native execution settings to vLLM CLI arguments."""
+    arguments = []
+    for name, value in settings.items():
+        flag = "--" + name.replace("_", "-")
+        if isinstance(value, bool):
+            arguments.append(flag if value else "--no-" + name.replace("_", "-"))
+        elif isinstance(value, dict):
+            arguments.extend([flag, json.dumps(value)])
+        elif isinstance(value, (list, tuple)):
+            arguments.extend([flag, *map(str, value)])
+        elif value is not None:
+            arguments.extend([flag, str(value)])
+    return arguments
+
 
 class Server:
     """Own a localhost vLLM server and an internal HTTP event loop.
 
     Args:
-        repo: Self-contained linear checkpoint to serve.
+        repo: Self-contained scalar checkpoint to serve.
 
     Examples:
         >>> server = Server(repo)  # doctest: +SKIP
         >>> server.stop()  # doctest: +SKIP
     """
 
-    def __init__(self, repo):
+    def __init__(self, repo, **kwargs):
         """Start the server, wait for readiness, and create one reusable client."""
         if importlib.util.find_spec("vllm") is None:
             message = 'Install the optional backend with uv pip install "social-jev[vllm]" on Linux'
@@ -47,16 +65,7 @@ class Server:
             str(port),
             "--served-model-name",
             "social-jev",
-            "--runner",
-            "pooling",
-            "--hf-overrides",
-            json.dumps({"architectures": ["SocialJevPoolingModel"], "is_causal": True}),
-            "--pooler-config",
-            json.dumps({"seq_pooling_type": "LAST", "use_activation": False}),
-            "--enable-prefix-caching",
-            "--no-enable-chunked-prefill",
-            "--gpu-memory-utilization",
-            "0.8",
+            *cli_arguments(engine_settings(**kwargs)),
         ]
         self.process = subprocess.Popen(
             command,

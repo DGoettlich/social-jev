@@ -5,11 +5,19 @@ from transformers import PreTrainedTokenizerFast
 
 from social_jev import Processor
 from social_jev.config import SocialJevConfig
-from social_jev.transformers import LinearModel
+from social_jev.transformers import ScalarModel
 
 
-@pytest.fixture
-def checkpoint(tmp_path):
+@pytest.fixture(
+    params=[
+        {"type": "linear"},
+        {"type": "mlp", "dims": [32, 1], "activation": "gelu"},
+        {"type": "mlp", "dims": [32, 16, 1], "activation": "silu", "layernorm": True},
+        {"type": "mlp", "dims": [32, 1], "activation": "relu"},
+    ],
+    ids=["linear", "mlp-gelu", "mlp-silu-layernorm", "mlp-relu"],
+)
+def checkpoint(tmp_path, request):
     words = [
         "[PAD]",
         "[UNK]",
@@ -38,6 +46,7 @@ def checkpoint(tmp_path):
     tokenizer.chat_template = Processor.template()
     tokenizer.save_pretrained(tmp_path)
     config = SocialJevConfig(
+        decision_head=request.param,
         vocab_size=len(words),
         hidden_size=128,
         intermediate_size=256,
@@ -48,7 +57,7 @@ def checkpoint(tmp_path):
         max_position_embeddings=256,
         pad_token_id=0,
     )
-    model = LinearModel(config)
+    model = ScalarModel(config)
     with torch.no_grad():
         for index, parameter in enumerate(model.parameters()):
             values = torch.arange(parameter.numel(), dtype=torch.float32).reshape(parameter.shape)

@@ -1,5 +1,6 @@
 import asyncio
 import importlib.util
+import shutil
 import subprocess
 import sys
 import threading
@@ -7,7 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from social_jev import Processor, Query, Request, SocialJev, server
+from social_jev import Processor, Query, Request, SocialJev
+from social_jev.vllm import server
 
 
 def test_async_requests_keep_loop_responsive_and_stop_owned_server(checkpoint, monkeypatch):  # noqa: PLR0915 -- Exercise one complete serving lifecycle.
@@ -30,7 +32,23 @@ def test_async_requests_keep_loop_responsive_and_stop_owned_server(checkpoint, m
     offline = SocialJev.from_pretrained(checkpoint)
     request = Request(state="S", queries=[Query(text="Q", options=["A", "B"])])
     expected = offline.query(request)
-    model = SocialJev.from_pretrained(checkpoint, backend="vllm", serve=True)
+    cache = checkpoint.parent / (checkpoint.name + "-hf-cache")
+    repository = cache / "models--social-jev--fixture"
+    snapshot = repository / "snapshots" / "fixture"
+    snapshot.parent.mkdir(parents=True)
+    shutil.copytree(checkpoint, snapshot)
+    (repository / "refs").mkdir()
+    (repository / "refs" / "main").write_text("fixture")
+    model = SocialJev.from_pretrained(
+        "social-jev/fixture",
+        cache_dir=cache,
+        local_files_only=True,
+        backend="vllm",
+        serve=True,
+        tensor_parallel_size=4,
+        pipeline_parallel_size=2,
+        gpu_memory_utilization=0.9,
+    )
     entered = threading.Event()
     release = threading.Event()
     original_encode = Processor.encode
@@ -73,6 +91,10 @@ def test_async_requests_keep_loop_responsive_and_stop_owned_server(checkpoint, m
         assert not model.engine.thread.is_alive()
         assert model.engine.client.is_closed
         assert commands[0][commands[0].index("--host") + 1] == "127.0.0.1"
+        command = commands[0]
+        assert command[command.index("--tensor-parallel-size") + 1] == "4"
+        assert command[command.index("--pipeline-parallel-size") + 1] == "2"
+        assert command[command.index("--gpu-memory-utilization") + 1] == "0.9"
         model.stop()
     finally:
         release.set()

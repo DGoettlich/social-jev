@@ -1,4 +1,4 @@
-"""Offline vLLM pooling for the fixed linear classification method."""
+"""Offline vLLM pooling for the fixed scalar classification method."""
 
 from vllm import (  # ty: ignore[unresolved-import] -- Optional Linux GPU dependency.
     LLM,
@@ -6,32 +6,28 @@ from vllm import (  # ty: ignore[unresolved-import] -- Optional Linux GPU depend
 )
 from vllm.config import PoolerConfig  # ty: ignore[unresolved-import]
 
+from . import engine_settings
+
 
 class VllmEngine:
     """Submit all candidate sequences once and let vLLM schedule execution.
 
     Args:
-        repo: Self-contained linear checkpoint.
+        repo: Self-contained scalar checkpoint.
 
     Examples:
         >>> engine = VllmEngine(repo)  # doctest: +SKIP
         >>> engine.stop()  # doctest: +SKIP
     """
 
-    def __init__(self, repo):
+    def __init__(self, repo, **kwargs):
         """Load the native pooling model with prefix caching."""
-        self.engine = LLM(
-            model=str(repo),
-            runner="pooling",
-            hf_overrides={"architectures": ["SocialJevPoolingModel"], "is_causal": True},
-            pooler_config=PoolerConfig(seq_pooling_type="LAST", use_activation=False),
-            enable_prefix_caching=True,
-            enable_chunked_prefill=False,
-            gpu_memory_utilization=0.8,
-        )
+        settings = engine_settings(**kwargs)
+        settings["pooler_config"] = PoolerConfig(**settings["pooler_config"])
+        self.engine = LLM(model=str(repo), **settings)
 
     def score(self, inputs: list[list[int]]) -> list[float]:
-        """Return one raw linear score per unpadded candidate."""
+        """Return one raw scalar score per unpadded candidate."""
         if not inputs:
             return []
         assert self.engine is not None

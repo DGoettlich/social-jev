@@ -3,17 +3,23 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, cast
+
+from huggingface_hub import snapshot_download
+from transformers import AutoTokenizer
 
 from .config import SocialJevConfig
 from .data import Processor
 
 if TYPE_CHECKING:
+    from transformers import PreTrainedTokenizerBase
+
     from .types import Request, Result
 
 
 class SocialJev:
-    """Classify documents using a trained Qwen3 linear-head checkpoint.
+    """Classify documents using a trained Qwen3 linear or MLP checkpoint.
 
     Args:
         processor: Checkpoint request preparation and result decoding.
@@ -35,25 +41,62 @@ class SocialJev:
         self.serve = serve
 
     @classmethod
-    def from_pretrained(cls, repo, *, backend="transformers", serve=False):
-        """Load a linear checkpoint for offline inference or async vLLM serving."""
+    def from_pretrained(cls, repo, *, backend="transformers", serve=False, **kwargs):
+        """Load a scalar-head checkpoint for offline inference or async vLLM serving."""
         if backend not in {"transformers", "vllm"} or (serve and backend != "vllm"):
             message = "Choose transformers offline, vllm offline, or vllm with serve=True"
             raise ValueError(message)
-        config = SocialJevConfig.from_pretrained(repo)
-        processor = Processor.from_pretrained(repo, config.max_position_embeddings)
+        loading = {
+            key: kwargs[key]
+            for key in (
+                "revision",
+                "token",
+                "cache_dir",
+                "local_files_only",
+                "force_download",
+                "subfolder",
+            )
+            if key in kwargs
+        }
+        if backend == "vllm":
+            if not Path(repo).is_dir():
+                subfolder = loading.get("subfolder", "")
+                download = {key: value for key, value in loading.items() if key != "subfolder"}
+                repo = str(
+                    Path(
+                        snapshot_download(
+                            str(repo),
+                            **download,
+                            allow_patterns=[
+                                "*.json",
+                                "*.safetensors",
+                                "*.jinja",
+                                "*.model",
+                                "*.txt",
+                            ],
+                        )
+                    )
+                    / subfolder
+                )
+            else:
+                repo = str(Path(repo) / loading.get("subfolder", ""))
+            kwargs = {key: value for key, value in kwargs.items() if key not in loading}
+            loading = {}
+        SocialJevConfig.from_pretrained(repo, **loading)
+        tokenizer = AutoTokenizer.from_pretrained(repo, **loading)
+        processor = Processor(cast("PreTrainedTokenizerBase", tokenizer))
         if backend == "transformers":
             from .transformers import TransformersEngine  # noqa: PLC0415
 
-            engine = TransformersEngine(repo, processor.tokenizer)
+            engine = TransformersEngine(repo, processor.tokenizer, **kwargs)
         elif serve:
-            from .server import Server  # noqa: PLC0415
+            from .vllm.server import Server  # noqa: PLC0415
 
-            engine = Server(repo)
+            engine = Server(repo, **kwargs)
         else:
-            from .vllm import VllmEngine  # noqa: PLC0415
+            from .vllm.offline import VllmEngine  # noqa: PLC0415
 
-            engine = VllmEngine(repo)
+            engine = VllmEngine(repo, **kwargs)
         return cls(processor, engine, serve=serve)
 
     def query(self, requests: Request | list[Request]) -> list[list[Result]]:

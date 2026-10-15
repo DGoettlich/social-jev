@@ -2,6 +2,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
+import torch
 
 from social_jev import Query, Request, SocialJev
 
@@ -68,3 +69,52 @@ def test_context_limit_and_execution_modes_fail_clearly(checkpoint):
     with pytest.raises(ValueError, match="Choose"):
         SocialJev.from_pretrained(checkpoint, serve=True)
     model.stop()
+
+
+def test_format_tokenize_split_runs_once_per_document(checkpoint, monkeypatch):
+    model = SocialJev.from_pretrained(checkpoint)
+    formatted = []
+    apply_template = model.processor.tokenizer.apply_chat_template
+
+    def tokenize(messages, **kwargs):
+        formatted.append(messages)
+        return apply_template(messages, **kwargs)
+
+    monkeypatch.setattr(model.processor.tokenizer, "apply_chat_template", tokenize)
+    items = requests()
+    try:
+        results = model.query(items)
+        assert [len(group) for group in results] == [2, 1]
+        assert len(formatted) == 2
+        assert [message["role"] for message in formatted[0]] == [
+            "state",
+            "query",
+            "option",
+            "option",
+            "query",
+            "option",
+            "option",
+            "option",
+        ]
+        assert [message["content"] for message in formatted[0]] == [
+            "S",
+            "Q",
+            "A",
+            "B",
+            "R",
+            "C",
+            "A",
+            "B",
+        ]
+    finally:
+        model.stop()
+
+
+def test_transformers_loading_kwargs_reach_tokenizer_and_model(checkpoint):
+    model = SocialJev.from_pretrained(checkpoint, dtype=torch.float64, local_files_only=True)
+    try:
+        assert model.engine.model.dtype == torch.float64
+        assert model.processor.tokenizer is not None
+        assert len(model.query(requests())) == 2
+    finally:
+        model.stop()

@@ -1,25 +1,25 @@
-"""Offline Qwen3 execution with the trained scalar linear head."""
+"""Offline Qwen3 execution with the trained scalar linear or MLP head."""
 
 import torch
-from torch import nn
 from transformers import PreTrainedModel, Qwen3Model
 
 from .config import SocialJevConfig
 from .data import Batch
+from .head import DecisionHeadConfig, ScalarHead
 
 
-class LinearModel(PreTrainedModel):
-    """Load the backbone and linear weights from a SocialJev checkpoint.
+class ScalarModel(PreTrainedModel):
+    """Load the backbone and scalar-head weights from a SocialJev checkpoint.
 
     Args:
-        config: Qwen3 configuration for the linear classifier.
+        config: Qwen3 configuration for the scalar classifier.
 
     Examples:
-        >>> model = LinearModel.from_pretrained(repo)  # doctest: +SKIP
+        >>> model = ScalarModel.from_pretrained(repo)  # doctest: +SKIP
     """
 
     config_class = SocialJevConfig
-    """Configuration class for linear checkpoints."""
+    """Configuration class for scalar-head checkpoints."""
     base_model_prefix = "backbone"
     """Checkpoint prefix for backbone parameters."""
     _supports_sdpa = True
@@ -29,7 +29,9 @@ class LinearModel(PreTrainedModel):
         """Construct the Qwen3 backbone and scalar readout."""
         super().__init__(config)
         self.backbone = Qwen3Model(config)
-        self.decision_head = nn.Linear(config.hidden_size, 1)
+        self.decision_head = ScalarHead(
+            DecisionHeadConfig(**config.decision_head), config.hidden_size
+        )
         self.post_init()
 
     def forward(self, input_ids, attention_mask):
@@ -39,11 +41,11 @@ class LinearModel(PreTrainedModel):
         ).last_hidden_state
         rows = torch.arange(input_ids.shape[0], device=input_ids.device)
         positions = attention_mask.sum(-1) - 1
-        return self.decision_head(hidden[rows, positions]).squeeze(-1)
+        return self.decision_head(hidden[rows, positions])
 
 
 class TransformersEngine:
-    """Run a collection of candidate sequences as one padded CPU batch.
+    """Run a collection of candidate sequences as one padded batch.
 
     Args:
         repo: Self-contained checkpoint path or Hugging Face repository.
@@ -55,11 +57,13 @@ class TransformersEngine:
         []
     """
 
-    def __init__(self, repo, tokenizer):
-        """Load the checkpoint in its saved dtype on CPU."""
-        model, loading = LinearModel.from_pretrained(repo, dtype="auto", output_loading_info=True)
+    def __init__(self, repo, tokenizer, **kwargs):
+        """Load the checkpoint using caller dtype and device-placement settings."""
+        model, loading = ScalarModel.from_pretrained(
+            repo, output_loading_info=True, **{"dtype": "auto", **kwargs}
+        )
         if loading["missing_keys"] or loading["unexpected_keys"]:
-            message = "Checkpoint weights do not match the backbone and trained linear head"
+            message = "Checkpoint weights do not match the backbone and trained linear or MLP head"
             raise ValueError(message)
         self.model = model.eval()
         self.pad_id = tokenizer.pad_token_id
@@ -72,7 +76,11 @@ class TransformersEngine:
         if not inputs:
             return []
         assert self.model is not None
-        batch = Batch.from_inputs(inputs, self.pad_id)
+        maximum = self.model.config.max_position_embeddings
+        if any(len(ids) > maximum for ids in inputs):
+            message = "Candidate sequence exceeds model context capacity"
+            raise ValueError(message)
+        batch = Batch.from_inputs(inputs, self.pad_id).to(self.model.device)
         return (
             self.model(input_ids=batch.input_ids, attention_mask=batch.attention_mask)
             .float()

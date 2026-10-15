@@ -6,13 +6,13 @@ license = "MIT"
 license-files = ["LICENSE"]
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["torch>=2.13", "transformers>=5.17,<6", "pydantic>=2"]
+dependencies = ["torch>=2.13", "transformers>=5.17,<6", "pydantic>=2", "huggingface-hub>=1"]
 
 [project.optional-dependencies]
 vllm = ["vllm==0.31.0; sys_platform == 'linux'", "httpx>=0.28,<1"]
 
 [project.entry-points."vllm.general_plugins"]
-social_jev = "social_jev.plugin:register"
+social_jev = "social_jev.vllm.plugin:register"
 
 [dependency-groups]
 dev = [

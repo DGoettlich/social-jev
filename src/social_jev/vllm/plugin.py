@@ -7,4 +7,4 @@ def register():
         ModelRegistry,
     )
 
-    ModelRegistry.register_model("SocialJevPoolingModel", "social_jev.pooling:PoolingModel")
+    ModelRegistry.register_model("SocialJevPoolingModel", "social_jev.vllm.pooling:PoolingModel")
