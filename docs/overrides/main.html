@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block site_nav %}
+  {% if nav %}
+    <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation">
+      <div class="md-sidebar__scrollwrap">
+        <div class="md-sidebar__inner">
+          <div class="docs-version">
+            <label for="docs-version">Documentation version</label>
+            <select id="docs-version" data-docs-version="{{ config.extra.package_version }}" aria-describedby="version-status">
+              <option value="{{ config.extra.package_version }}">{{ config.extra.package_version }}</option>
+            </select>
+            <span id="version-status" role="status"></span>
+          </div>
+          {% include "partials/nav.html" %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
+  {% if "toc.integrate" not in features %}
+    <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc">
+      <div class="md-sidebar__scrollwrap">
+        <div class="md-sidebar__inner">{% include "partials/toc.html" %}</div>
+      </div>
+    </div>
+  {% endif %}
+{% endblock %}
+
