@@ -95,7 +95,7 @@ name = "configuration file locations"
 language = "fail"
 entry = "move TOML into config/ or containers/, and YAML into config/, unless it is an explicitly allowed tool configuration."
 files = '\.(toml|ya?ml)$'
-exclude = '^(config/|containers/.*\.toml$|pyproject\.toml$|prek\.toml$|ruff\.toml$|\.github/workflows/[^/]+\.ya?ml$)'
+exclude = '^(config/|containers/.*\.toml$|pyproject\.toml$|mkdocs\.yml$|prek\.toml$|ruff\.toml$|\.github/workflows/[^/]+\.ya?ml$)'
 
 [[repos.hooks]]
 id = "layout"

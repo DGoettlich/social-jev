@@ -13,3 +13,4 @@ wheels/
 docs/coverage/
 mutants/
 mutation-report/
+site/

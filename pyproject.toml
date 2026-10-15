@@ -15,6 +15,7 @@ vllm = ["vllm==0.31.0", "httpx"]
 social_jev = "social_jev.vllm.plugin:register"
 
 [dependency-groups]
+docs = ["mkdocs-material", "mkdocstrings[python]"]
 dev = [
     "actionlint-py>=1.7.12.24",
     "deptry>=0.25.1",
