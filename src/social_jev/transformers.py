@@ -28,9 +28,9 @@ class ScalarModel(PreTrainedModel):
     def __init__(self, config: SocialJevConfig):
         """Construct the Qwen3 backbone and scalar readout."""
         super().__init__(config)
-        self.backbone = Qwen3Model(config)
+        self.backbone = Qwen3Model(config.backbone_config)
         self.decision_head = ScalarHead(
-            DecisionHeadConfig(**config.decision_head), config.hidden_size
+            DecisionHeadConfig(**config.decision_head), config.backbone_config.hidden_size
         )
         self.post_init()
 
@@ -76,7 +76,7 @@ class TransformersEngine:
         if not inputs:
             return []
         assert self.model is not None
-        maximum = self.model.config.max_position_embeddings
+        maximum = self.model.config.backbone_config.max_position_embeddings
         if any(len(ids) > maximum for ids in inputs):
             message = "Candidate sequence exceeds model context capacity"
             raise ValueError(message)

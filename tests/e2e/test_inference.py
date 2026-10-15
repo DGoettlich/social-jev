@@ -1,4 +1,5 @@
 import asyncio
+import json
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -21,6 +22,12 @@ def test_checkpoint_classifies_and_preserves_nested_order(checkpoint):
     model = SocialJev.from_pretrained(checkpoint)
     items = requests()
     actual = model.query(items)
+    saved_config = json.loads((checkpoint / "config.json").read_text())
+    assert saved_config["model_type"] == "social_jev"
+    assert saved_config["backbone_config"]["model_type"] == "qwen3"
+    assert saved_config["backbone_config"]["hidden_size"] == 128
+    assert "hidden_size" not in saved_config
+    assert saved_config["decision_head"]["type"] in {"linear", "mlp"}
     assert [len(group) for group in actual] == [2, 1]
     for item, group in zip(items, actual, strict=True):
         single = model.query(item)

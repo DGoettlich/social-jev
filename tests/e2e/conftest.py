@@ -47,15 +47,18 @@ def checkpoint(tmp_path, request):
     tokenizer.save_pretrained(tmp_path)
     config = SocialJevConfig(
         decision_head=request.param,
-        vocab_size=len(words),
-        hidden_size=128,
-        intermediate_size=256,
-        num_hidden_layers=1,
-        num_attention_heads=2,
-        num_key_value_heads=2,
-        head_dim=64,
-        max_position_embeddings=256,
-        pad_token_id=0,
+        backbone_config={
+            "model_type": "qwen3",
+            "vocab_size": len(words),
+            "hidden_size": 128,
+            "intermediate_size": 256,
+            "num_hidden_layers": 1,
+            "num_attention_heads": 2,
+            "num_key_value_heads": 2,
+            "head_dim": 64,
+            "max_position_embeddings": 256,
+            "pad_token_id": 0,
+        },
     )
     model = ScalarModel(config)
     with torch.no_grad():

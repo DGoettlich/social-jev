@@ -30,7 +30,7 @@ class ScalarPooler(Pooler):
         """Create the replicated scalar head on the worker's allocation device."""
         super().__init__()
         self.decision_head = ScalarHead(
-            DecisionHeadConfig(**config.decision_head), config.hidden_size
+            DecisionHeadConfig(**config.decision_head), config.backbone_config.hidden_size
         )
 
     def get_supported_tasks(self):
@@ -60,8 +60,12 @@ class PoolingModel(as_embedding_model(Qwen3ForCausalLM)):
 
     def __init__(self, *, vllm_config, prefix=""):
         """Replace the embedding wrapper's default pooler with scalar scoring."""
-        super().__init__(vllm_config=vllm_config, prefix=prefix)
-        self.pooler = ScalarPooler(vllm_config.model_config.hf_config)
+        config = vllm_config.model_config.hf_config
+        backbone_view = vllm_config.with_hf_config(
+            config.backbone_config, architectures=["Qwen3ForCausalLM"]
+        )
+        super().__init__(vllm_config=backbone_view, prefix=prefix)
+        self.pooler = ScalarPooler(config)
 
     def load_weights(self, weights):
         """Route backbone weights to native loading and head weights to the pooler."""
