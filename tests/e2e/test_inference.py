@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 import torch
+from transformers import AutoTokenizer
 
 from social_jev import Query, Request, SocialJev
 
@@ -117,11 +118,22 @@ def test_format_tokenize_split_runs_once_per_document(checkpoint, monkeypatch):
         model.stop()
 
 
-def test_transformers_loading_kwargs_reach_model(checkpoint):
+def test_transformers_loading_kwargs_reach_model(checkpoint, monkeypatch):
+    tokenizer_loads = []
+    load_tokenizer = AutoTokenizer.from_pretrained
+
+    def load(repo, **kwargs):
+        tokenizer_loads.append(repo)
+        return load_tokenizer(repo, **kwargs)
+
+    monkeypatch.setattr(AutoTokenizer, "from_pretrained", load)
     model = SocialJev.from_pretrained(checkpoint, dtype=torch.float64, local_files_only=True)
     try:
         assert model.engine.model.dtype == torch.float64
-        assert model.processor.tokenizer is not None
+        assert len(tokenizer_loads) == 1
+        assert model.processor.tokenizer is model.engine.tokenizer
+        assert model.engine.model.config.backbone_config.pad_token_id is None
+        assert model.engine.pad_id == model.engine.tokenizer.pad_token_id == 0
         assert len(model.query(requests())) == 2
     finally:
         model.stop()

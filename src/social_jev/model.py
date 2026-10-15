@@ -44,20 +44,22 @@ class SocialJev:
         if backend not in {"transformers", "vllm"} or (serve and backend != "vllm"):
             message = "Choose transformers offline, vllm offline, or vllm with serve=True"
             raise ValueError(message)
-        tokenizer = AutoTokenizer.from_pretrained(repo, revision=kwargs.get("revision"))
-        processor = Processor(cast("PreTrainedTokenizerBase", tokenizer))
         if backend == "transformers":
             from .transformers import TransformersEngine  # noqa: PLC0415
 
             engine = TransformersEngine(repo, **kwargs)
-        elif serve:
-            from .vllm.server import Server  # noqa: PLC0415
-
-            engine = Server(repo, **kwargs)
+            tokenizer = engine.tokenizer
         else:
-            from .vllm.offline import VllmEngine  # noqa: PLC0415
+            tokenizer = AutoTokenizer.from_pretrained(repo, revision=kwargs.get("revision"))
+            if serve:
+                from .vllm.server import Server  # noqa: PLC0415
 
-            engine = VllmEngine(repo, **kwargs)
+                engine = Server(repo, **kwargs)
+            else:
+                from .vllm.offline import VllmEngine  # noqa: PLC0415
+
+                engine = VllmEngine(repo, **kwargs)
+        processor = Processor(cast("PreTrainedTokenizerBase", tokenizer))
         return cls(processor, engine, serve=serve)
 
     def query(self, requests: Request | list[Request]) -> list[list[Result]]:

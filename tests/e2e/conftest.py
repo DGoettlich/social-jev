@@ -57,7 +57,6 @@ def checkpoint(tmp_path, request):
             "num_key_value_heads": 2,
             "head_dim": 64,
             "max_position_embeddings": 256,
-            "pad_token_id": 0,
         },
     )
     model = SocialJevModel(config)

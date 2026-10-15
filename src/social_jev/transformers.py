@@ -1,11 +1,16 @@
 """Offline Qwen3 execution with the trained scalar linear or MLP head."""
 
+from typing import TYPE_CHECKING, cast
+
 import torch
-from transformers import PreTrainedModel, Qwen3Model
+from transformers import AutoTokenizer, PreTrainedModel, Qwen3Model
 
 from .config import SocialJevConfig
 from .data import Batch
 from .head import DecisionHeadConfig, ScalarHead
+
+if TYPE_CHECKING:
+    from transformers import PreTrainedTokenizerBase
 
 
 class SocialJevModel(PreTrainedModel):
@@ -57,9 +62,13 @@ class TransformersEngine:
     """
 
     def __init__(self, repo, **kwargs):
-        """Load the checkpoint using caller dtype and device-placement settings."""
+        """Load the model and tokenizer from the same checkpoint revision."""
         self.model = SocialJevModel.from_pretrained(repo, **kwargs).eval()
-        self.pad_id = self.model.config.backbone_config.pad_token_id
+        self.tokenizer = cast(
+            "PreTrainedTokenizerBase",
+            AutoTokenizer.from_pretrained(repo, revision=kwargs.get("revision")),
+        )
+        self.pad_id = self.tokenizer.pad_token_id
 
     @torch.inference_mode()
     def score(self, inputs: list[list[int]]) -> list[float]:
