@@ -1,4 +1,4 @@
-"""Benchmark async SocialJev inference on Manifesto passages.
+"""Benchmark async SocialJev inference on FineWeb passages.
 
 Run with ``uv run --group benchmark --extra vllm python scripts/speedbench.py --help``.
 Dataset preparation and model startup are excluded from inference timing.
@@ -11,11 +11,10 @@ import asyncio
 import csv
 import json
 import os
-import random
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from importlib.metadata import version
-from itertools import batched, groupby
+from itertools import batched
 from pathlib import Path
 from statistics import mean, median
 from time import perf_counter
@@ -33,92 +32,68 @@ if TYPE_CHECKING:
 
 QUERY = Query(text="Does this passage discuss education policy?", options=["No", "Yes"])
 """Binary classification task shared by every passage."""
-DATASET = "social-jev/manifesto"
-"""Manifesto source dataset."""
+DATASET = "HuggingFaceFW/fineweb"
+"""FineWeb source dataset."""
+SUBSET = "sample-10BT"
+"""FineWeb subset streamed for benchmark inputs."""
+MAX_CHARS = 12_000
+"""Maximum characters retained from each source document."""
 MAX_MODEL_LEN = 8192
 """Maximum complete candidate length accepted by the benchmark server."""
-REVISION = "v0.1alpha"
-"""Fixed dataset revision for reproducible input preparation."""
 
 
 @dataclass
 class Document:
-    """Manifesto source units belonging to one document."""
+    """One source document from FineWeb."""
 
-    id: str
-    """Source document identifier."""
-    units: list[dict[str, Any]]
-    """Source rows in their original order."""
-
-    def passages(self) -> Iterator[Passage]:
-        """Group consecutive units using mert's labelling rules."""
-        rng = random.Random(f"group:{self.id}")
-        start = 0
-        while start < len(self.units):
-            end = min(start + rng.randint(10, 75), len(self.units))
-            units = self.units[start:end]
-            start = end
-            if any(unit["labels"] for unit in units):
-                yield Passage(units)
-
-
-@dataclass
-class Passage:
-    """Consecutive source units forming one inference input."""
-
-    units: list[dict[str, Any]]
-    """Rows included in this passage."""
+    text: str
+    """Original document text."""
 
     def request(self) -> Request:
-        """Join source texts and attach the benchmark question."""
-        return Request(state="\n".join(unit["text"] for unit in self.units), queries=[QUERY])
+        """Slice the source text and attach the benchmark question."""
+        return Request(state=self.text[:MAX_CHARS], queries=[QUERY])
 
 
 class LoadStep(Step[Document]):
-    """Stream original Manifesto rows grouped by source document.
+    """Stream FineWeb source documents.
 
     Examples:
-        >>> step = LoadStep()  # doctest: +SKIP
-        >>> document = step.next()  # doctest: +SKIP
+        >>> document = LoadStep().next()  # doctest: +SKIP
     """
 
     def __init__(self):
-        """Open the pinned original training split."""
-        rows = load_dataset(DATASET, "original", revision=REVISION, split="train", streaming=True)
-        self.documents = groupby(rows, key=lambda row: row["document_id"])
+        """Open the FineWeb sample as a stream."""
+        self.rows = iter(load_dataset(DATASET, SUBSET, split="train", streaming=True))
 
     def next(self) -> Document | None:
-        """Read the next source document, or None when exhausted."""
-        item = next(self.documents, None)
-        return None if item is None else Document(item[0], list(item[1]))
+        """Return the next source document, or None at exhaustion."""
+        row = next(self.rows, None)
+        return None if row is None else Document(row["text"])
 
 
 class PassageStep(Step[Request]):
-    """Pull documents and return passage requests up to the limit.
+    """Pull documents and return sliced passage requests up to the limit.
 
     Examples:
-        >>> step = PassageStep(LoadStep(), limit=100)  # doctest: +SKIP
+        >>> step = PassageStep(LoadStep(), limit=100_000)  # doctest: +SKIP
         >>> request = step.next()  # doctest: +SKIP
     """
 
     def __init__(self, parent: Step[Document], limit: int):
-        """Attach the source and initialize this run's passage cursor."""
+        """Attach the source and initialize the passage count."""
         self.parent = parent
         self.limit = limit
         self.yielded = 0
-        self.pending: Iterator[Passage] = iter(())
 
     def next(self) -> Request | None:
-        """Return the next request, or None at the limit or source end."""
+        """Return the next sliced passage, or None at the limit or source end."""
         if self.yielded >= self.limit:
             return None
-        while (passage := next(self.pending, None)) is None:
-            document = self.parent.next()
-            if document is None:
-                return None
-            self.pending = document.passages()
+        document = self.parent.next()
+        if document is None:
+            return None
         self.yielded += 1
-        return passage.request()
+        return document.request()
 
 
 @dataclass
@@ -415,21 +390,21 @@ async def main() -> None:
                 "model": args.model,
                 "documents": len(requests),
                 "dataset": DATASET,
-                "dataset_revision": REVISION,
-                "rows_per_passage": [10, 75],
+                "subset": SUBSET,
+                "max_chars": MAX_CHARS,
                 "query": QUERY.model_dump(),
                 "batch_size": args.batch_size,
                 "concurrency": args.concurrency,
                 "gpu_memory_utilization": args.gpu_memory_utilization,
                 "max_model_len": MAX_MODEL_LEN,
                 "telemetry_interval_seconds": 1,
-                "candidate_tokens": {
+                "input_sequence_tokens": {
                     "min": min(lengths),
                     "median": median(lengths),
                     "max": max(lengths),
                     "total": sum(lengths),
                 },
-                "versions": {name: version(name) for name in ("social-jev", "vllm", "datasets")},
+                "versions": {name: version(name) for name in ("social-jev", "vllm")},
                 "gpu": telemetry.gpu_info,
             },
             "results": results,
