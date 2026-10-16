@@ -27,7 +27,7 @@ DATASET = "omarkamali/wikipedia-monthly"
 """Wikipedia article repository."""
 SNAPSHOT = "20261001"
 """Fixed Wikipedia dump date."""
-SHARDS = 500
+SHARDS = 1000
 """Number of randomly selected English shards."""
 CHUNK_TOKENS = 4096
 """Document tokens per chunk, excluding the classification prompt."""
@@ -68,14 +68,14 @@ class TokenizedDocument:
 
 
 class LoadStep(Step[Document]):
-    """Stream shuffled articles from 500 randomly selected shards.
+    """Stream shuffled articles from 1,000 randomly selected shards.
 
     Examples:
-        >>> source = LoadStep()  # doctest: +SKIP
+        >>> source = LoadStep(limit=100_000)  # doctest: +SKIP
         >>> document = source.next()  # doctest: +SKIP
     """
 
-    def __init__(self):
+    def __init__(self, limit: int):
         """Select fixed random shards and initialize the shuffled stream."""
         self.shards = Random(42).sample(range(1450), k=SHARDS)
         base = f"hf://datasets/{DATASET}/{SNAPSHOT}/en/train"
@@ -87,9 +87,12 @@ class LoadStep(Step[Document]):
         )
         self.rows = iter(dataset.shuffle(seed=42, buffer_size=10_000))
         self.documents = 0
+        self.limit = limit
 
     def next(self) -> Document | None:
         """Return the next article, or None at exhaustion."""
+        if self.documents >= self.limit:
+            return None
         row = next(self.rows, None)
         if row is None:
             return None
@@ -140,30 +143,23 @@ class SplitStep(Step[TokenizedDocument]):
 
 
 class IntoPassageStep(Step[Request]):
-    """Convert chunks into requests up to the configured chunk limit.
+    """Convert every article chunk into a classification request.
 
     Examples:
-        >>> passages = IntoPassageStep(chunks, tokenizer, limit=100)  # doctest: +SKIP
+        >>> passages = IntoPassageStep(chunks, tokenizer)  # doctest: +SKIP
         >>> request = passages.next()  # doctest: +SKIP
     """
 
-    def __init__(
-        self, parent: Step[TokenizedDocument], tokenizer: PreTrainedTokenizerBase, limit: int
-    ):
-        """Connect the chunk source and initialize the output count."""
+    def __init__(self, parent: Step[TokenizedDocument], tokenizer: PreTrainedTokenizerBase):
+        """Connect the chunk source and model tokenizer."""
         self.parent = parent
         self.tokenizer = tokenizer
-        self.limit = limit
-        self.yielded = 0
 
     def next(self) -> Request | None:
-        """Return one chunk request, or None at the limit or source end."""
-        if self.yielded >= self.limit:
-            return None
+        """Return one chunk request, or None at source exhaustion."""
         chunk = self.parent.next()
         if chunk is None:
             return None
-        self.yielded += 1
         return chunk.into_passage(self.tokenizer)
 
 
@@ -171,7 +167,7 @@ def arguments() -> argparse.Namespace:
     """Read one benchmark configuration from the command line."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", default="social-jev/social-jev-0.6B-preview")
-    parser.add_argument("--chunks", type=int, default=100_000)
+    parser.add_argument("--documents", type=int, default=100_000)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--concurrency", type=int, default=16)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
@@ -201,10 +197,13 @@ async def main() -> None:
     )
     startup_seconds = perf_counter() - started
     try:
-        source = LoadStep()
+        print(
+            f"Preparing {args.documents} source articles from {SHARDS} selected shards.", flush=True
+        )
+        source = LoadStep(limit=args.documents)
         tokens = TokenizeStep(source, model.processor.tokenizer)
         chunks = SplitStep(tokens)
-        pipeline = IntoPassageStep(chunks, model.processor.tokenizer, limit=args.chunks)
+        pipeline = IntoPassageStep(chunks, model.processor.tokenizer)
         requests = list(iter(pipeline.next, None))
         print(f"Prepared {len(requests)} chunks from {source.documents} articles.", flush=True)
         lengths = candidate_lengths(model, requests)
@@ -228,7 +227,7 @@ async def main() -> None:
                 "model": args.model,
                 "chunks": len(requests),
                 "source_articles": source.documents,
-                "chunk_limit": args.chunks,
+                "document_limit": args.documents,
                 "dataset": DATASET,
                 "snapshot": SNAPSHOT,
                 "language": "en",
