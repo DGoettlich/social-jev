@@ -1,0 +1,7 @@
+image = "/iopsstor/scratch/cscs/dgoettll/abs01/mert/containers/clariden.sqsh"
+mounts = ["/users", "/capstor", "/iopsstor"]
+writable = true
+
+[annotations]
+com.hooks.netstack.source = "host"
+com.hooks.cxi.enabled = "false"

@@ -5197,13 +5197,17 @@ vllm = [
 [package.dev-dependencies]
 benchmark = [
     { name = "datasets" },
+    { name = "httpx" },
+    { name = "prometheus-client" },
 ]
 dev = [
     { name = "actionlint-py" },
     { name = "datasets" },
     { name = "deptry" },
+    { name = "httpx" },
     { name = "mutmut" },
     { name = "prek" },
+    { name = "prometheus-client" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pytest-randomly" },
@@ -5225,13 +5229,19 @@ requires-dist = [
 provides-extras = ["vllm"]
 
 [package.metadata.requires-dev]
-benchmark = [{ name = "datasets" }]
+benchmark = [
+    { name = "datasets" },
+    { name = "httpx" },
+    { name = "prometheus-client" },
+]
 dev = [
     { name = "actionlint-py", specifier = ">=1.7.12.24" },
     { name = "datasets" },
     { name = "deptry", specifier = ">=0.25.1" },
+    { name = "httpx" },
     { name = "mutmut", specifier = ">=3.7.0" },
     { name = "prek", specifier = ">=0.5.2" },
+    { name = "prometheus-client" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-cov", specifier = ">=7.1.0" },
     { name = "pytest-randomly", specifier = ">=5.0.0" },
