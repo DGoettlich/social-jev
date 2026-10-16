@@ -14,9 +14,9 @@ if [[ ${1:-} != --worker ]]; then
     [[ $minutes =~ ^[1-9][0-9]*$ ]]
     mkdir -p artifacts
     sbatch --account=abs01 --partition=debug --nodes=1 --ntasks=1 \
-        --gpus-per-task=1 --time="$minutes" --job-name=socialjev-speedbench \
-        --chdir="$PWD" --output="$PWD/artifacts/speedbench-%j.log" \
-        scripts/speedbench.sh --worker "${benchmark_args[@]}"
+        --gpus-per-task=1 --time="$minutes" --job-name=socialjev-fineweb \
+        --chdir="$PWD" --output="$PWD/artifacts/fineweb-%j.log" \
+        scripts/fineweb.sh --worker "${benchmark_args[@]}"
     exit
 fi
 shift
@@ -43,7 +43,7 @@ srun --ntasks=1 --gpus-per-task=1 --cpu-bind=none --network=disable_rdzv_get \
     bash -c '
         set -euo pipefail
         export CUDA_VISIBLE_DEVICES=0
-        export UV_PROJECT_ENVIRONMENT="$SCRATCH/social-jev/venv-speedbench"
+        export UV_PROJECT_ENVIRONMENT="$SCRATCH/social-jev/venv-fineweb"
         /usr/local/bin/uv sync --locked --group benchmark --extra vllm
-        exec /usr/local/bin/uv run --no-sync python scripts/speedbench.py "$@"
-    ' speedbench "$@"
+        exec /usr/local/bin/uv run --no-sync python scripts/fineweb.py "$@"
+    ' fineweb "$@"

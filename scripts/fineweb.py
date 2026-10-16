@@ -1,6 +1,6 @@
 """Benchmark async SocialJev inference on FineWeb passages.
 
-Run with ``uv run --group benchmark --extra vllm python scripts/speedbench.py --help``.
+Run with ``uv run --group benchmark --extra vllm python scripts/fineweb.py --help``.
 Dataset preparation and model startup are excluded from inference timing.
 """
 
@@ -354,7 +354,7 @@ async def main() -> None:
     """Prepare passages, monitor one timed run and save its parameters and results."""
     args = arguments()
     model_name = args.model.rsplit("/", 1)[-1].replace("social-jev", "socialjev").lower()
-    output = args.output or Path("artifacts") / "throughput" / model_name / "summary.json"
+    output = args.output or Path("artifacts") / "fineweb" / model_name / "summary.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     pipeline = PassageStep(LoadStep(), limit=args.documents)
     requests = list(iter(pipeline.next, None))

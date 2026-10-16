@@ -126,7 +126,7 @@ on_dependency_change = "rerun"
 social_jev = ["py.typed", "templates/*.jinja"]
 
 [tool.deptry]
-known_first_party = ["social_jev", "speedbench"]
+known_first_party = ["social_jev", "fineweb"]
 
 [tool.deptry.per_rule_ignores]
 # Dataset loading belongs to the benchmark dependency group, not package runtime.

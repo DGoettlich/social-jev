@@ -15,7 +15,7 @@ from time import perf_counter
 from typing import TYPE_CHECKING, cast
 
 from datasets import load_dataset
-from speedbench import MAX_MODEL_LEN, QUERY, SpeedBench, Telemetry, candidate_lengths
+from fineweb import MAX_MODEL_LEN, QUERY, SpeedBench, Telemetry, candidate_lengths
 
 from social_jev import Request, SocialJev
 from social_jev.data import Step
@@ -181,9 +181,7 @@ async def main() -> None:
     """Prepare passages, monitor one timed run and save its parameters and results."""
     args = arguments()
     model_name = args.model.rsplit("/", 1)[-1].replace("social-jev", "socialjev").lower()
-    output = (
-        args.output or Path("artifacts") / "throughput" / "wikipedia" / model_name / "summary.json"
-    )
+    output = args.output or Path("artifacts") / "wikipedia" / model_name / "summary.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     started = perf_counter()
     model = SocialJev.from_pretrained(
