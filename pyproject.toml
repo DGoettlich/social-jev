@@ -15,7 +15,13 @@ vllm = ["vllm==0.31.0", "httpx"]
 social_jev = "social_jev.vllm.plugin:register"
 
 [dependency-groups]
+benchmark = [
+    "datasets",
+    "httpx",
+    "prometheus-client",
+]
 dev = [
+    { include-group = "benchmark" },
     "actionlint-py>=1.7.12.24",
     "deptry>=0.25.1",
     "mutmut>=3.7.0",
@@ -118,3 +124,10 @@ on_dependency_change = "rerun"
 
 [tool.setuptools.package-data]
 social_jev = ["py.typed", "templates/*.jinja"]
+
+[tool.deptry]
+known_first_party = ["social_jev", "fineweb"]
+
+[tool.deptry.per_rule_ignores]
+# Dataset loading belongs to the benchmark dependency group, not package runtime.
+DEP004 = ["datasets", "prometheus_client"]
