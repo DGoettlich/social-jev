@@ -344,6 +344,7 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--concurrency", type=int, default=16)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
+    parser.add_argument("--max-num-batched-tokens", type=int)
     parser.add_argument("--output", type=Path)
     return parser.parse_args()
 
@@ -367,6 +368,7 @@ async def main() -> None:
         serve=True,
         gpu_memory_utilization=args.gpu_memory_utilization,
         max_model_len=MAX_MODEL_LEN,
+        max_num_batched_tokens=args.max_num_batched_tokens,
     )
     startup_seconds = perf_counter() - started
     try:
@@ -397,6 +399,7 @@ async def main() -> None:
                 "concurrency": args.concurrency,
                 "gpu_memory_utilization": args.gpu_memory_utilization,
                 "max_model_len": MAX_MODEL_LEN,
+                "max_num_batched_tokens": args.max_num_batched_tokens,
                 "telemetry_interval_seconds": 1,
                 "input_sequence_tokens": {
                     "min": min(lengths),
