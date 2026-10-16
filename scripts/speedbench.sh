@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # Submit from the SocialJev checkout on Clariden; --time is an integer in minutes.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
-
 if [[ ${1:-} != --worker ]]; then
+    cd "$(dirname "${BASH_SOURCE[0]}")/.."
     minutes=5
     benchmark_args=()
     while (( $# )); do
