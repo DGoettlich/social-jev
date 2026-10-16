@@ -103,4 +103,4 @@ name = "layout"
 language = "fail"
 entry = "move this file into an allowed top-level folder."
 files = '/'
-exclude = '^(src|tests|ci|config|assets|pipelines|scripts|containers|reports|docs|\.github)/'
+exclude = '^(src|tests|ci|config|assets|pipelines|scripts|containers|reports|docs|artifacts/throughput|\.github)/'

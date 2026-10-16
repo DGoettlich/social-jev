@@ -14,4 +14,5 @@ docs/coverage/
 mutants/
 mutation-report/
 
-artifacts/
+artifacts/*
+!artifacts/throughput/

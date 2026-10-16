@@ -171,8 +171,8 @@ class Telemetry:
     def __init__(self, server_url: str, output: Path):
         """Configure trace paths and the single GPU selected by the launcher."""
         self.server_url = server_url
-        self.gpu_path = output.with_suffix(".gpu.csv")
-        self.server_path = output.with_suffix(".server.jsonl")
+        self.gpu_path = output.parent / "gpu.csv"
+        self.server_path = output.parent / "server.jsonl"
         self.gpu_id = os.environ["CUDA_VISIBLE_DEVICES"]
         self.stopping = asyncio.Event()
         self.samples: list[dict[str, float]] = []
@@ -345,6 +345,7 @@ def arguments() -> argparse.Namespace:
     parser.add_argument("--concurrency", type=int, default=16)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
     parser.add_argument("--max-num-batched-tokens", type=int)
+    parser.add_argument("--port", type=int)
     parser.add_argument("--output", type=Path)
     return parser.parse_args()
 
@@ -352,11 +353,8 @@ def arguments() -> argparse.Namespace:
 async def main() -> None:
     """Prepare passages, monitor one timed run and save its parameters and results."""
     args = arguments()
-    output = args.output or Path("artifacts") / (
-        "throughput-"
-        + args.model.rsplit("/", 1)[-1].replace("social-jev", "socialjev").lower()
-        + ".json"
-    )
+    model_name = args.model.rsplit("/", 1)[-1].replace("social-jev", "socialjev").lower()
+    output = args.output or Path("artifacts") / "throughput" / model_name / "summary.json"
     output.parent.mkdir(parents=True, exist_ok=True)
     pipeline = PassageStep(LoadStep(), limit=args.documents)
     requests = list(iter(pipeline.next, None))
@@ -369,6 +367,7 @@ async def main() -> None:
         gpu_memory_utilization=args.gpu_memory_utilization,
         max_model_len=MAX_MODEL_LEN,
         max_num_batched_tokens=args.max_num_batched_tokens,
+        port=args.port,
     )
     startup_seconds = perf_counter() - started
     try:
@@ -400,6 +399,7 @@ async def main() -> None:
                 "gpu_memory_utilization": args.gpu_memory_utilization,
                 "max_model_len": MAX_MODEL_LEN,
                 "max_num_batched_tokens": args.max_num_batched_tokens,
+                "port": args.port,
                 "telemetry_interval_seconds": 1,
                 "input_sequence_tokens": {
                     "min": min(lengths),
