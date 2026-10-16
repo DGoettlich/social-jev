@@ -1,0 +1,55 @@
+{
+  "params": {
+    "model": "social-jev/social-jev-0.6B-preview",
+    "documents": 100000,
+    "dataset": "HuggingFaceFW/fineweb",
+    "subset": "sample-10BT",
+    "max_chars": 12000,
+    "query": {
+      "text": "Does this passage discuss education policy?",
+      "options": [
+        "No",
+        "Yes"
+      ]
+    },
+    "batch_size": 128,
+    "concurrency": 16,
+    "gpu_memory_utilization": 0.9,
+    "max_model_len": 8192,
+    "max_num_batched_tokens": 32768,
+    "telemetry_interval_seconds": 1,
+    "input_sequence_tokens": {
+      "min": 51,
+      "median": 417.0,
+      "max": 5477,
+      "total": 123580360
+    },
+    "versions": {
+      "social-jev": "0.1.0a2",
+      "vllm": "0.31.0"
+    },
+    "gpu": "GPU-55d714f0-dc86-3e39-9712-5b0155a1d890, NVIDIA GH200 120GB, 97871"
+  },
+  "results": {
+    "elapsed_seconds": 224.40409834706225,
+    "documents_per_second": 445.6246598729249,
+    "classifications_per_second": 445.6246598729249,
+    "batch_latency_median_seconds": 4.531933612539433,
+    "batch_latency_p95_seconds": 5.138941167853773,
+    "input_tokens": 123580360,
+    "computed_tokens": 62737368,
+    "cached_tokens": 60842992,
+    "preemptions": 0,
+    "input_tokens_per_second": 550704.5589197361,
+    "computed_tokens_per_second": 279573.1827632252,
+    "gpu_samples": 225,
+    "server_samples": 218,
+    "gpu_utilization_mean_percent": 74.35111111111111,
+    "gpu_memory_peak_mib": 88770.0,
+    "gpu_power_mean_watts": 474.03653333333335,
+    "running_requests_mean": 1.0,
+    "waiting_requests_peak": 3785.0,
+    "kv_cache_usage_peak_fraction": 0.0032318491529261806,
+    "startup_seconds": 77.10231167101301
+  }
+}
