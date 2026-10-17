@@ -47,7 +47,7 @@ class VllmEngine:
         output = None
         async for result in self.engine.encode(
             {"prompt_token_ids": ids},
-            PoolingParams(task="embed", use_activation=False),
+            PoolingParams(task="embed"),
             request_id=str(next(self.request_ids)),
         ):
             output = result

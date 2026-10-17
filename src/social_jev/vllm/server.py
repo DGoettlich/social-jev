@@ -110,8 +110,6 @@ class Server:
                 "model": "social-jev",
                 "task": "embed",
                 "input": inputs,
-                "add_special_tokens": False,
-                "use_activation": False,
             },
         )
         response.raise_for_status()

@@ -45,7 +45,6 @@ def test_local_queries_share_engine_and_keep_results_with_their_call(  # noqa: C
             active.add(request_id)
             try:
                 assert params.task == "embed"
-                assert params.use_activation is False
                 if self.hold:
                     await asyncio.sleep(60)
                 await asyncio.sleep(0.01)
