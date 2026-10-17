@@ -5,10 +5,14 @@ import pytest
 
 from social_jev import Query, Request, SocialJev
 
-pytestmark = pytest.mark.skipif(
-    os.environ.get("SOCIAL_JEV_GPU_TESTS") != "1",
-    reason="Set SOCIAL_JEV_GPU_TESTS=1 on a Linux CUDA host with social-jev[vllm] installed",
-)
+pytestmark = [
+    pytest.mark.skipif(
+        os.environ.get("SOCIAL_JEV_GPU_TESTS") != "1",
+        reason="Set SOCIAL_JEV_GPU_TESTS=1 on a Linux CUDA host with social-jev[vllm] installed",
+    ),
+    pytest.mark.filterwarnings("ignore:.*torch.jit.*is deprecated:DeprecationWarning"),
+    pytest.mark.filterwarnings("ignore:Unclosed context:ResourceWarning"),
+]
 
 
 def test_native_vllm_checkpoint_loading_offline_and_online(checkpoint):

@@ -1,6 +1,7 @@
 """Exercise the local async adapter with CPU scoring at the native vLLM boundary."""
 
 import asyncio
+import os
 import sys
 from types import SimpleNamespace
 
@@ -14,6 +15,7 @@ from social_jev.transformers import TransformersEngine
 def test_local_queries_share_engine_and_keep_results_with_their_call(  # noqa: C901 -- Exercise one complete local engine lifecycle.
     checkpoint, monkeypatch
 ):
+    monkeypatch.delenv("VLLM_WORKER_MULTIPROC_METHOD", raising=False)
     reference = SocialJev.from_pretrained(checkpoint)
     items = [
         Request(state="S", queries=[Query(text="Q", options=["A", "B"])]),
@@ -34,6 +36,7 @@ def test_local_queries_share_engine_and_keep_results_with_their_call(  # noqa: C
 
         @classmethod
         def from_engine_args(cls, args):
+            assert os.environ["VLLM_WORKER_MULTIPROC_METHOD"] == "spawn"
             return cls(args)
 
         async def encode(self, prompt, params, request_id):

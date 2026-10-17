@@ -1,6 +1,7 @@
 """Offline vLLM pooling for the fixed scalar classification method."""
 
 import asyncio
+import os
 import threading
 from itertools import count
 
@@ -17,6 +18,9 @@ from . import engine_settings
 class VllmEngine:
     """Share a native asynchronous vLLM engine across synchronous and async calls.
 
+    In standalone scripts, construct the engine inside an
+    ``if __name__ == "__main__":`` guard so spawned workers can import the script.
+
     Args:
         repo: Self-contained scalar checkpoint.
 
@@ -29,6 +33,8 @@ class VllmEngine:
         """Load the native pooling model with prefix caching."""
         settings = engine_settings(**kwargs)
         settings["pooler_config"] = PoolerConfig(**settings["pooler_config"])
+        # CUDA workers must start fresh when the engine is created on a background thread.
+        os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
         self.request_ids = count()
         self.engine = None
         self.loop = asyncio.new_event_loop()
