@@ -16,7 +16,6 @@ def engine_settings(**kwargs) -> dict:
     settings["pooler_config"] = {
         **pooler,
         "seq_pooling_type": "LAST",
-        "use_activation": False,
     }
     settings["runner"] = "pooling"
     return settings

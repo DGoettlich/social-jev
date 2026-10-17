@@ -140,7 +140,7 @@ def test_async_requests_keep_loop_responsive_and_stop_owned_server(  # noqa: C90
             "architectures": ["SocialJevPoolingModel"],
         }
         pooler = json.loads(command[command.index("--pooler-config") + 1])
-        assert pooler == {"normalize": False, "seq_pooling_type": "LAST", "use_activation": False}
+        assert pooler == {"normalize": False, "seq_pooling_type": "LAST"}
         model.stop()
     finally:
         release.set()
