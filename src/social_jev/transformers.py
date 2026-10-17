@@ -31,7 +31,6 @@ class SocialJevModel(PreTrainedModel):
     """Enable the backbone's scaled dot-product attention implementation."""
 
     def __init__(self, config: SocialJevConfig):
-        """Construct the Qwen3 backbone and scalar readout."""
         super().__init__(config)
         self.backbone = Qwen3Model(config.backbone_config)
         self.decision_head = ScalarHead(
@@ -57,12 +56,11 @@ class TransformersEngine:
 
     Examples:
         >>> engine = TransformersEngine(repo)  # doctest: +SKIP
-        >>> engine.score([])  # doctest: +SKIP
+        >>> engine.process([])  # doctest: +SKIP
         []
     """
 
     def __init__(self, repo, **kwargs):
-        """Load the model and tokenizer from the same checkpoint revision."""
         self.model = SocialJevModel.from_pretrained(repo, **kwargs).eval()
         self.tokenizer = cast(
             "PreTrainedTokenizerBase",
@@ -71,8 +69,8 @@ class TransformersEngine:
         self.pad_id = self.tokenizer.pad_token_id
 
     @torch.inference_mode()
-    def score(self, inputs: list[list[int]]) -> list[float]:
-        """Pad candidates and return ordered scalar logits."""
+    def process(self, inputs: list[list[int]]) -> list[float]:
+        """Process token sequences synchronously and return scalar scores in input order."""
         if not inputs:
             return []
         assert self.model is not None

@@ -114,10 +114,12 @@ def test_async_requests_keep_loop_responsive_and_stop_owned_server(  # noqa: C90
             model.stop()
 
     try:
-        with pytest.raises(RuntimeError, match=r"await model\.aquery"):
-            model.query(request)
+        release.set()
+        assert model.query(request) == expected
+        assert model.query([]) == []
+        release.clear()
         asyncio.run(concurrent())
-        assert model.engine.process.poll() is not None
+        assert model.engine.server_process.poll() is not None
         assert not model.engine.thread.is_alive()
         assert model.engine.client.is_closed
         command = commands[0]
@@ -136,10 +138,9 @@ def test_async_requests_keep_loop_responsive_and_stop_owned_server(  # noqa: C90
         assert overrides == {
             "attention_dropout": 0.0,
             "architectures": ["SocialJevPoolingModel"],
-            "is_causal": True,
         }
         pooler = json.loads(command[command.index("--pooler-config") + 1])
-        assert pooler == {"normalize": False, "seq_pooling_type": "LAST", "use_activation": False}
+        assert pooler == {"normalize": False, "seq_pooling_type": "LAST"}
         model.stop()
     finally:
         release.set()
