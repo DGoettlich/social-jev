@@ -36,7 +36,7 @@ def test_local_queries_share_engine_and_keep_results_with_their_call(  # noqa: C
 
         @classmethod
         def from_engine_args(cls, args):
-            assert os.environ["VLLM_WORKER_MULTIPROC_METHOD"] == "spawn"
+            assert "VLLM_WORKER_MULTIPROC_METHOD" not in os.environ
             return cls(args)
 
         async def encode(self, prompt, params, request_id):
