@@ -22,7 +22,7 @@ class SocialJev:
     Args:
         processor: Checkpoint request preparation and result decoding.
         engine: Selected execution engine.
-        serve: Whether the engine accepts asynchronous server requests.
+        serve: Whether vLLM runs behind an owned HTTP server.
 
     Examples:
         >>> model = SocialJev.from_pretrained(repo)  # doctest: +SKIP
@@ -40,7 +40,7 @@ class SocialJev:
 
     @classmethod
     def from_pretrained(cls, repo, *, backend="transformers", serve=False, **kwargs):
-        """Load a scalar-head checkpoint for offline inference or async vLLM serving."""
+        """Load a scalar-head checkpoint for local inference or vLLM serving."""
         if backend not in {"transformers", "vllm"} or (serve and backend != "vllm"):
             message = "Choose transformers offline, vllm offline, or vllm with serve=True"
             raise ValueError(message)
@@ -63,18 +63,15 @@ class SocialJev:
         return cls(processor, engine, serve=serve)
 
     def query(self, requests: Request | list[Request]) -> list[list[Result]]:
-        """Classify offline and always return document/question nested results."""
-        if self.serve:
-            message = "Use await model.aquery() for online vLLM inference"
-            raise RuntimeError(message)
+        """Classify synchronously and return document/query nested results."""
         encoded = self.processor.encode(requests)
         scores = self.engine.score(encoded.inputs)
         return self.processor.decode(scores, encoded)
 
     async def aquery(self, requests: Request | list[Request]) -> list[list[Result]]:
-        """Keep CPU preparation and decoding off the caller's event-loop thread."""
-        if not self.serve:
-            message = "aquery requires backend='vllm', serve=True"
+        """Classify through either vLLM path, keeping CPU work off the caller's event loop."""
+        if not hasattr(self.engine, "ascore"):
+            message = "aquery requires backend='vllm'"
             raise RuntimeError(message)
         encoded = await asyncio.to_thread(self.processor.encode, requests)
         scores = await self.engine.ascore(encoded.inputs)

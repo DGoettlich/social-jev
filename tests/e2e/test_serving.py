@@ -114,8 +114,10 @@ def test_async_requests_keep_loop_responsive_and_stop_owned_server(  # noqa: C90
             model.stop()
 
     try:
-        with pytest.raises(RuntimeError, match=r"await model\.aquery"):
-            model.query(request)
+        release.set()
+        assert model.query(request) == expected
+        assert model.query([]) == []
+        release.clear()
         asyncio.run(concurrent())
         assert model.engine.process.poll() is not None
         assert not model.engine.thread.is_alive()
