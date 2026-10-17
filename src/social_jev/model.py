@@ -40,7 +40,7 @@ class SocialJev:
 
     @classmethod
     def from_pretrained(cls, repo, *, backend="transformers", serve=False, **kwargs):
-        """Load a scalar-head checkpoint for local inference or vLLM serving."""
+        """Load a scalar-head checkpoint for offline inference or vLLM serving."""
         if backend not in {"transformers", "vllm"} or (serve and backend != "vllm"):
             message = "Choose transformers offline, vllm offline, or vllm with serve=True"
             raise ValueError(message)
@@ -63,13 +63,13 @@ class SocialJev:
         return cls(processor, engine, serve=serve)
 
     def query(self, requests: Request | list[Request]) -> list[list[Result]]:
-        """Classify synchronously and return document/query nested results."""
+        """Classify synchronously and always return document/question nested results."""
         encoded = self.processor.encode(requests)
         scores = self.engine.score(encoded.inputs)
         return self.processor.decode(scores, encoded)
 
     async def aquery(self, requests: Request | list[Request]) -> list[list[Result]]:
-        """Classify through either vLLM path, keeping CPU work off the caller's event loop."""
+        """Keep CPU preparation and decoding off the caller's event-loop thread."""
         if not hasattr(self.engine, "ascore"):
             message = "aquery requires backend='vllm'"
             raise RuntimeError(message)

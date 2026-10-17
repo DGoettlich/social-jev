@@ -65,7 +65,7 @@ class VllmEngine:
         return [task.result() for task in tasks]
 
     def score(self, inputs: list[list[int]]) -> list[float]:
-        """Wait for ordered scalar scores on the engine's event loop."""
+        """Return one raw scalar score per unpadded candidate."""
         return asyncio.run_coroutine_threadsafe(self.request(inputs), self.loop).result()
 
     async def ascore(self, inputs: list[list[int]]) -> list[float]:
