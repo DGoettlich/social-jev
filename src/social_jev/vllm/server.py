@@ -120,6 +120,12 @@ class Server:
         entries = sorted(response.json()["data"], key=lambda entry: entry["index"])
         return [entry["data"][0] for entry in entries]
 
+    def score(self, inputs: list[list[int]]) -> list[float]:
+        """Wait for HTTP execution on the owned event loop."""
+        if not inputs:
+            return []
+        return asyncio.run_coroutine_threadsafe(self.request(inputs), self.loop).result()
+
     async def ascore(self, inputs: list[list[int]]) -> list[float]:
         """Await HTTP execution without blocking the caller's event loop."""
         if not inputs:
