@@ -33,7 +33,7 @@ class VllmEngine:
         """Load the native pooling model with prefix caching."""
         settings = engine_settings(**kwargs)
         settings["pooler_config"] = PoolerConfig(**settings["pooler_config"])
-        # CUDA workers must start fresh when the engine is created on a background thread.
+        # Avoid inheriting CUDA driver state left by earlier work in the caller's process.
         os.environ.setdefault("VLLM_WORKER_MULTIPROC_METHOD", "spawn")
         self.request_ids = count()
         self.engine = None
