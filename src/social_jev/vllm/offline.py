@@ -15,7 +15,7 @@ from . import engine_settings
 
 
 class VllmEngine:
-    """Share a native asynchronous vLLM engine across synchronous and async calls.
+    """Load a local vLLM model for synchronous or asynchronous inference.
 
     Args:
         repo: Self-contained scalar checkpoint.
@@ -26,7 +26,6 @@ class VllmEngine:
     """
 
     def __init__(self, repo, **kwargs):
-        """Load the native pooling model with prefix caching."""
         settings = engine_settings(**kwargs)
         settings["pooler_config"] = PoolerConfig(**settings["pooler_config"])
         self.request_ids = count()
@@ -41,11 +40,9 @@ class VllmEngine:
             raise
 
     async def start(self, repo, settings):
-        """Construct the engine on the event loop that owns its output handler."""
         self.engine = AsyncLLM.from_engine_args(AsyncEngineArgs(model=str(repo), **settings))
 
-    async def candidate(self, ids: list[int]) -> float:
-        """Collect one candidate's final score through its own request stream."""
+    async def submit_query_option_sequence(self, ids: list[int]) -> float:
         assert self.engine is not None
         output = None
         async for result in self.engine.encode(
@@ -58,30 +55,32 @@ class VllmEngine:
         assert output.finished
         return output.outputs.data.item()
 
-    async def request(self, inputs: list[list[int]]) -> list[float]:
-        """Run candidates concurrently and retain their input order."""
+    async def submit_as_query_option_sequences(self, inputs: list[list[int]]) -> list[float]:
         async with asyncio.TaskGroup() as group:
-            tasks = [group.create_task(self.candidate(ids)) for ids in inputs]
+            tasks = [group.create_task(self.submit_query_option_sequence(ids)) for ids in inputs]
         return [task.result() for task in tasks]
 
-    def score(self, inputs: list[list[int]]) -> list[float]:
-        """Return one raw scalar score per unpadded candidate."""
-        return asyncio.run_coroutine_threadsafe(self.request(inputs), self.loop).result()
+    def process(self, inputs: list[list[int]]) -> list[float]:
+        """Process token sequences synchronously and return scalar scores in input order."""
+        return asyncio.run_coroutine_threadsafe(
+            self.submit_as_query_option_sequences(inputs), self.loop
+        ).result()
 
-    async def ascore(self, inputs: list[list[int]]) -> list[float]:
-        """Await ordered scalar scores without blocking the caller's event loop."""
-        future = asyncio.run_coroutine_threadsafe(self.request(inputs), self.loop)
+    async def aprocess(self, inputs: list[list[int]]) -> list[float]:
+        """Process token sequences asynchronously and return scalar scores in input order."""
+        future = asyncio.run_coroutine_threadsafe(
+            self.submit_as_query_option_sequences(inputs), self.loop
+        )
         return await asyncio.wrap_future(future)
 
     async def shutdown(self):
-        """Release workers and finish the engine's asynchronous generators."""
         if self.engine is not None:
             self.engine.shutdown()
             self.engine = None
         await self.loop.shutdown_asyncgens()
 
     def stop(self):
-        """Shut down the owned engine and its event-loop thread."""
+        """Stop the engine, release its workers, and close its event-loop thread."""
         if self.loop.is_running():
             try:
                 asyncio.run_coroutine_threadsafe(self.shutdown(), self.loop).result()

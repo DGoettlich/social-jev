@@ -119,7 +119,7 @@ def test_async_requests_keep_loop_responsive_and_stop_owned_server(  # noqa: C90
         assert model.query([]) == []
         release.clear()
         asyncio.run(concurrent())
-        assert model.engine.process.poll() is not None
+        assert model.engine.server_process.poll() is not None
         assert not model.engine.thread.is_alive()
         assert model.engine.client.is_closed
         command = commands[0]

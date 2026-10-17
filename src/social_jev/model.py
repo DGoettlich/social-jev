@@ -17,12 +17,12 @@ if TYPE_CHECKING:
 
 
 class SocialJev:
-    """Classify documents using a trained Qwen3 linear or MLP checkpoint.
+    """Load a SocialJev model for synchronous or asynchronous inference.
 
     Args:
         processor: Checkpoint request preparation and result decoding.
         engine: Selected execution engine.
-        serve: Whether vLLM runs behind an owned HTTP server.
+        serve: Whether to launch a vLLM HTTP server.
 
     Examples:
         >>> model = SocialJev.from_pretrained(repo)  # doctest: +SKIP
@@ -33,14 +33,45 @@ class SocialJev:
     """
 
     def __init__(self, processor: Processor, engine, *, serve: bool = False):
-        """Attach the processor and execution engine."""
         self.processor = processor
         self.engine = engine
         self.serve = serve
 
     @classmethod
     def from_pretrained(cls, repo, *, backend="transformers", serve=False, **kwargs):
-        """Load a scalar-head checkpoint for offline inference or vLLM serving."""
+        """Load a checkpoint and configure its inference backend.
+
+        Args:
+            repo: Hugging Face model repository or local checkpoint directory.
+            backend: Inference backend: "transformers" (default) or "vllm".
+            serve: Launch a managed vLLM HTTP server. Requires backend="vllm".
+                Otherwise, inference runs through the local backend.
+            **kwargs: Arguments forwarded to the selected backend's model loader.
+                Transformers accepts options such as device_map and dtype.
+                vLLM accepts options such as tensor_parallel_size,
+                gpu_memory_utilization, and max_model_len.
+
+        Returns:
+            SocialJev: Loaded model with synchronous query support.
+                Both local and server-based vLLM also support asynchronous queries.
+
+        Examples:
+            Load with Transformers:
+
+            >>> model = SocialJev.from_pretrained(repo)  # doctest: +SKIP
+
+            Load with local vLLM:
+
+            >>> model = SocialJev.from_pretrained(  # doctest: +SKIP
+            ...     repo, backend="vllm", gpu_memory_utilization=0.6
+            ... )
+
+            Launch a vLLM server using two GPUs:
+
+            >>> model = SocialJev.from_pretrained(  # doctest: +SKIP
+            ...     repo, backend="vllm", serve=True, tensor_parallel_size=2
+            ... )
+        """
         if backend not in {"transformers", "vllm"} or (serve and backend != "vllm"):
             message = "Choose transformers offline, vllm offline, or vllm with serve=True"
             raise ValueError(message)
@@ -63,20 +94,20 @@ class SocialJev:
         return cls(processor, engine, serve=serve)
 
     def query(self, requests: Request | list[Request]) -> list[list[Result]]:
-        """Classify synchronously and always return document/question nested results."""
+        """Submit requests synchronously; results are ordered by document, then query."""
         encoded = self.processor.encode(requests)
-        scores = self.engine.score(encoded.inputs)
+        scores = self.engine.process(encoded.inputs)
         return self.processor.decode(scores, encoded)
 
     async def aquery(self, requests: Request | list[Request]) -> list[list[Result]]:
-        """Keep CPU preparation and decoding off the caller's event-loop thread."""
-        if not hasattr(self.engine, "ascore"):
+        """Submit requests asynchronously with vLLM; results are ordered by document, then query."""
+        if not hasattr(self.engine, "aprocess"):
             message = "aquery requires backend='vllm'"
             raise RuntimeError(message)
         encoded = await asyncio.to_thread(self.processor.encode, requests)
-        scores = await self.engine.ascore(encoded.inputs)
+        scores = await self.engine.aprocess(encoded.inputs)
         return await asyncio.to_thread(self.processor.decode, scores, encoded)
 
     def stop(self):
-        """Release owned resources after outstanding queries have finished."""
+        """Release model resources and stop any server launched by this instance."""
         self.engine.stop()

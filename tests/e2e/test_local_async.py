@@ -50,7 +50,7 @@ def test_local_queries_share_engine_and_keep_results_with_their_call(  # noqa: C
                     await asyncio.sleep(60)
                 await asyncio.sleep(0.01)
                 overlap.append(len(active))
-                score = self.model.score([prompt["prompt_token_ids"]])[0]
+                score = self.model.process([prompt["prompt_token_ids"]])[0]
                 yield SimpleNamespace(
                     finished=True, outputs=SimpleNamespace(data=torch.tensor(score))
                 )
