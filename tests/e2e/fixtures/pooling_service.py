@@ -19,7 +19,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
         with lock:
-            scores = engine.score(payload["input"])
+            scores = engine.process(payload["input"])
         data = [{"index": index, "data": [score]} for index, score in enumerate(scores)]
         body = json.dumps({"data": list(reversed(data))}).encode()
         self.send_response(200)

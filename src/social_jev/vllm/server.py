@@ -33,7 +33,7 @@ def cli_arguments(settings: dict) -> list[str]:
 
 
 class Server:
-    """Own a localhost vLLM server and an internal HTTP event loop.
+    """Launch a managed vLLM HTTP server for synchronous or asynchronous inference.
 
     Args:
         repo: Self-contained scalar checkpoint to serve.
@@ -44,7 +44,6 @@ class Server:
     """
 
     def __init__(self, repo, **kwargs):
-        """Start the server, wait for readiness, and create one reusable client."""
         if importlib.util.find_spec("vllm") is None:
             message = 'Install the optional backend with uv pip install "social-jev[vllm]" on Linux'
             raise ImportError(message)
@@ -73,7 +72,7 @@ class Server:
             "serve",
             *arguments,
         ]
-        self.process = subprocess.Popen(command, start_new_session=True)
+        self.server_process = subprocess.Popen(command, start_new_session=True)
         self.loop = asyncio.new_event_loop()
         self.thread = threading.Thread(target=self.loop.run_forever, daemon=True)
         self.thread.start()
@@ -89,7 +88,7 @@ class Server:
         """Wait for model readiness while detecting startup failures."""
         with httpx.Client(base_url=self.url, timeout=1) as probe:
             while True:
-                if self.process.poll() is not None:
+                if self.server_process.poll() is not None:
                     message = "vLLM exited during startup; see its server logs"
                     raise RuntimeError(message)
                 try:
@@ -103,8 +102,7 @@ class Server:
         """Create the HTTP client on the loop that owns its connections."""
         self.client = httpx.AsyncClient(base_url=self.url, timeout=None)
 
-    async def request(self, inputs: list[list[int]]) -> list[float]:
-        """Submit token sequences and restore the response's candidate order."""
+    async def submit_as_query_option_sequences(self, inputs: list[list[int]]) -> list[float]:
         assert self.client is not None
         response = await self.client.post(
             "/pooling",
@@ -112,19 +110,27 @@ class Server:
                 "model": "social-jev",
                 "task": "embed",
                 "input": inputs,
-                "add_special_tokens": False,
-                "use_activation": False,
             },
         )
         response.raise_for_status()
         entries = sorted(response.json()["data"], key=lambda entry: entry["index"])
         return [entry["data"][0] for entry in entries]
 
-    async def ascore(self, inputs: list[list[int]]) -> list[float]:
-        """Await HTTP execution without blocking the caller's event loop."""
+    def process(self, inputs: list[list[int]]) -> list[float]:
+        """Process token sequences synchronously and return scalar scores in input order."""
         if not inputs:
             return []
-        future = asyncio.run_coroutine_threadsafe(self.request(inputs), self.loop)
+        return asyncio.run_coroutine_threadsafe(
+            self.submit_as_query_option_sequences(inputs), self.loop
+        ).result()
+
+    async def aprocess(self, inputs: list[list[int]]) -> list[float]:
+        """Process token sequences asynchronously and return scalar scores in input order."""
+        if not inputs:
+            return []
+        future = asyncio.run_coroutine_threadsafe(
+            self.submit_as_query_option_sequences(inputs), self.loop
+        )
         return await asyncio.wrap_future(future)
 
     def stop(self):
@@ -135,6 +141,6 @@ class Server:
             self.loop.call_soon_threadsafe(self.loop.stop)
             self.thread.join()
             self.loop.close()
-        if self.process.poll() is None:
-            os.killpg(self.process.pid, signal.SIGTERM)
-            self.process.wait()
+        if self.server_process.poll() is None:
+            os.killpg(self.server_process.pid, signal.SIGTERM)
+            self.server_process.wait()
