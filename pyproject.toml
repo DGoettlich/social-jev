@@ -15,7 +15,7 @@ vllm = ["vllm==0.31.0", "httpx"]
 social_jev = "social_jev.vllm.plugin:register"
 
 [dependency-groups]
-docs = ["mkdocs-material", "mkdocstrings[python]"]
+docs = ["mkdocs-material"]
 benchmark = [
     "datasets",
     "httpx",

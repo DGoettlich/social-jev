@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_release_docs_and_wheel_keep_tooling_separate(tmp_path):
-    """Build versioned API pages and verify the public wheel excludes docs dependencies."""
+    """Build versioned public docs and verify the public wheel excludes docs dependencies."""
     root = Path(__file__).resolve().parents[2]
     site = tmp_path / "site"
     subprocess.run(
@@ -28,7 +28,14 @@ def test_release_docs_and_wheel_keep_tooling_separate(tmp_path):
     homepage = (site / "index.html").read_text()
     assert 'data-docs-version="v9.8.7"' in homepage
     assert 'href="https://social-jev.github.io/docs/v9.8.7/"' in homepage
-    reference = (site / "reference/api/index.html").read_text()
+    for page in ("concepts/index.html", "inference/index.html", "api/index.html"):
+        assert (site / page).is_file()
+    assert not (site / "reference").exists()
+    assert not (site / "roadmap").exists()
+    reference = (site / "api/index.html").read_text()
+    assert "Processor" not in reference
+    assert "VLLM_BATCH_INVARIANT" in reference
+    assert "Additional backend arguments" in reference
     for name in ("SocialJev", "Request", "Query", "Result"):
         assert name in reference
     assert (site / "search/search_index.json").is_file()

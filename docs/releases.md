@@ -49,9 +49,11 @@ versions and the landing page, and `/docs/versions.json`:
 {"latest": "v0.2.0", "versions": ["v0.2.0", "v0.1.0"]}
 ```
 
-Initially the website publishes stable `vMAJOR.MINOR.PATCH` tags only. It skips
-historical tags without `mkdocs.yml`, reconciles missing eligible versions on a
-dispatch or an explicit retry, and redirects `/docs/` to latest stable.
+The website publishes stable tags and prerelease tags such as `v0.1.0a3`,
+`v0.1.0b1`, and `v0.1.0rc1`. It skips historical tags without `mkdocs.yml` and
+reconciles missing eligible versions on a dispatch or an explicit retry.
+`/docs/` redirects to the latest stable version when one exists; otherwise it
+uses the newest prerelease.
 The package selector uses that manifest, selects the current URL version, and
 preserves the current page when available in the target version; otherwise it
 opens that version's homepage. No publication PR or manual merge is required. There is no periodic deployment

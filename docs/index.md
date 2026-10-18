@@ -1,57 +1,92 @@
-# Classify text with SocialJev
+# Getting started
 
-SocialJev provides Jev-like classification foundation models for the social sciences,
-inspired by TypeSafe Jev. It combines the flexibility of language models trained on
-trillions of tokens with the goal of fast, lightweight text classification.
-Define your task through a simple typed interface and SocialJev returns typed outputs.
+SocialJev is a family of 'classification foundation models' for the social sciences, inspired by [TypeSafe's Jev](https://typesafe.ai/blog/introducing-system-one-models-and-jev). The models combine the flexibility of modern language models trained on trillions of tokens of text with the speed of lightweight NLP methods. Define your task through a simple typed interface and SocialJev returns typed outputs.
 
-!!! note "Active development"
-    SocialJev is an alpha package. Interfaces and checkpoint formats may change
-    between releases. These pages describe the version selected in the sidebar.
+The models can be used **directly through Transformers**, without installing SocialJev, or **through the SocialJev package**, which also provides optional vLLM integrations for larger workloads.
 
-## Install
+> **Active development** — SocialJev is under active development. Interfaces may change between early releases.
+
+## Quickstart (Transformers)
+
+A checkpoint can be loaded from Huggingface and queried directly without installing the SocialJev package:
+
+```bash
+uv pip install torch transformers pydantic
+```
+
+```python
+from transformers import AutoModel
+
+model = AutoModel.from_pretrained(
+    "social-jev/social-jev-0.6B-preview",
+    trust_remote_code=True,
+)
+request = model.Request(
+    state="The council expanded the bus network.",
+    queries=[
+        model.Query(
+            text="Which policy area does this document concern?",
+            options=["Transport", "Education", "Healthcare"],
+        ),
+    ],
+)
+
+results = model.query(request)
+print(results[0][0].choice)
+print(results[0][0].probabilities)
+```
+
+A possible output might be:
+
+```text
+Transport
+{'Transport': 0.98, 'Education': 0.01, 'Healthcare': 0.01}
+```
+
+## Sustained workloads with the SocialJev package
+
+The package provides the same typed interface across inference backends. Its default backend is Transformers; for larger sustained workloads we recommend using SocialJev models via the integration with vllm, which is optimized for fast inference.
+
+To use SocialJev models with our package, first install the package from PyPI:
 
 ```bash
 uv pip install social-jev
 ```
 
-## Load a model and request a batch
+then load the model, define a query, and submit it to the model. The package provides two methods for submitting queries:
+
+1. **.query()** submits queries synchronously
+2. **.aquery()** submits them asynchronously
+
+We provide more details on the differences between the methods and different execution backends on the [inference page](inference.md). The example below uses the synchronous method, which you can use like so:
 
 ```python
 from social_jev import Query, Request, SocialJev
 
 model = SocialJev.from_pretrained("social-jev/social-jev-0.6B-preview")
-query = Query(
-    text="Which policy area does this document concern?",
-    options=["Transport", "Education", "Healthcare"],
+request = Request(
+    state="The council expanded the bus network.",
+    queries=[
+        Query(
+            text="Which policy area does this document concern?",
+            options=["Transport", "Education", "Healthcare"],
+        ),
+    ],
 )
-try:
-    results = model.query(
-        [
-            Request(state="The council expanded the bus network.", queries=[query]),
-            Request(state="The government recruited more teachers.", queries=[query]),
-        ]
-    )
-    print(results[0][0].model_dump())
-finally:
-    model.stop()
+
+results = model.query(request)
+print(results[0][0].choice)
+print(results[0][0].probabilities)
 ```
 
-An illustrative result:
+The returned results have the same structure as in the Transformers example above.
 
-```python
-{"choice": "Transport", "probabilities": {"Transport": 0.98, "Education": 0.01, "Healthcare": 0.01}}
-```
+## Roadmap
 
-The outer list follows document order; each inner list follows that document's
-question order. Probabilities are normalized over the options you supplied.
-The numbers above illustrate the output format and are not a guaranteed prediction.
+This is an early release. In particular, we are in the process of:
 
-## Choose how to run
-
-Use [offline inference](batch-inference.md) when the full input collection is ready.
-Use [async serving](serving.md) when requests arrive continuously or preparation
-should overlap GPU execution. Both use the same request and result types.
-
-The preview checkpoint currently has a **linear decision head**. The package also
-loads MLP heads when their architecture is saved in the checkpoint.
+1. Scaling the models and training pipeline; if these models do not yet seem to perform well on your task, consider shooting us an [email](mailto:dgoettlich@ethz.ch) and bear with us: future models will be trained on more diverse datasets and queries.
+2. Adding support for various GPU-providers so you can launch inference jobs without handling the GPU rental and setup yourself
+3. Adding a simple training interface so you can fine-tune your own model
+4. Adding an evaluation interface so you can evaluate the performance of SocialJev models under various queries easily
+5. Adding an interface to optimize SocialJev queries for your task

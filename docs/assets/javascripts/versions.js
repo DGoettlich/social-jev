@@ -1,4 +1,4 @@
-// The website owns the manifest and decides which release is latest stable.
+// The website owns the manifest and selects stable releases ahead of prereleases.
 document.addEventListener("DOMContentLoaded", async () => {
   const select = document.querySelector("[data-docs-version]");
   const status = document.getElementById("version-status");

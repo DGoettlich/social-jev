@@ -27,22 +27,6 @@ theme:
     - content.code.copy
 plugins:
   - search
-  - mkdocstrings:
-      handlers:
-        python:
-          paths: [src]
-          options:
-            docstring_style: google
-            # Pydantic generates constructors; its fields are documented separately.
-            docstring_options:
-              warn_unknown_params: false
-              warn_missing_types: false
-            show_source: false
-            show_root_heading: true
-            show_signature_annotations: true
-            signature_crossrefs: false
-            members_order: source
-            inherited_members: false
 markdown_extensions:
   - admonition
   - attr_list
@@ -60,16 +44,9 @@ extra_javascript:
 extra:
   generator: false
 nav:
-  - Quickstart: index.md
-  - Using SocialJev:
-      - Installation: installation.md
-      - Requests and results: requests-and-results.md
-      - Batch inference: batch-inference.md
-      - Serving: serving.md
-  - Reference:
-      - API: reference/api.md
-      - Pipeline and model: reference/architecture.md
-      - Checkpoints: reference/checkpoints.md
-      - Performance measurements: reference/performance.md
+  - Getting started: index.md
+  - Concepts: concepts.md
+  - Inference: inference.md
+  - API reference: api.md
   - Development:
       - Documentation and releases: releases.md
