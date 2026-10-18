@@ -48,5 +48,3 @@ nav:
   - Concepts: concepts.md
   - Inference: inference.md
   - API reference: api.md
-  - Development:
-      - Documentation and releases: releases.md
