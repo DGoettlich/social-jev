@@ -116,3 +116,17 @@ a:focus-visible, select:focus-visible, button:focus-visible { outline: 2px solid
 @media (max-width: 44.984375em) {
   .md-header__inner { gap: .25rem; }
 }
+
+.docs-github::after,
+.docs-project::after,
+.md-typeset a[href^="https://"]::after {
+  content: "";
+  display: inline-block;
+  width: .85em;
+  height: .85em;
+  flex-shrink: 0;
+  margin-left: .3em;
+  vertical-align: -.08em;
+  background: currentColor;
+  mask: url("../icons/external-link.svg") center / contain no-repeat;
+}
