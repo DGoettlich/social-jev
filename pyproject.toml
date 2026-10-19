@@ -1,6 +1,6 @@
 [project]
 name = "social-jev"
-version = "0.1.0a3"
+version = "0.1.0a4"
 description = "Jev-like classification foundation models for the social sciences"
 license = "MIT"
 license-files = ["LICENSE"]
