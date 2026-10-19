@@ -4,7 +4,11 @@
       {% include ".icons/material/menu.svg" %}
     </label>
     <a class="docs-brand" href="{{ nav.homepage.url | url }}">SocialJev</a>
+    {% if "a" in config.extra.package_version %}
     <span class="docs-badge">Alpha</span>
+    {% elif "b" in config.extra.package_version %}
+    <span class="docs-badge">Beta</span>
+    {% endif %}
     <span class="docs-header-label">Documentation</span>
     <div class="docs-header-spacer"></div>
     <label class="md-header__button md-icon" for="__search" aria-label="Search documentation">
