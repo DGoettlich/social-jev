@@ -16,7 +16,7 @@ if [[ ${1:-} != --worker ]]; then
     sbatch --account=abs01 --partition=debug --nodes=1 --ntasks=1 \
         --gpus-per-task=1 --time="$minutes" --job-name=socialjev-fineweb \
         --chdir="$PWD" --output="$PWD/artifacts/fineweb-%j.log" \
-        scripts/fineweb.sh --worker "${benchmark_args[@]}"
+        examples/fineweb.sh --worker "${benchmark_args[@]}"
     exit
 fi
 shift
@@ -45,5 +45,5 @@ srun --ntasks=1 --gpus-per-task=1 --cpu-bind=none --network=disable_rdzv_get \
         export CUDA_VISIBLE_DEVICES=0
         export UV_PROJECT_ENVIRONMENT="$SCRATCH/social-jev/venv-fineweb"
         /usr/local/bin/uv sync --locked --group benchmark --extra vllm
-        exec /usr/local/bin/uv run --no-sync python scripts/fineweb.py "$@"
+        exec /usr/local/bin/uv run --no-sync python examples/fineweb.py "$@"
     ' fineweb "$@"

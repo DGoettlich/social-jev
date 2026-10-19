@@ -85,9 +85,9 @@ types = ["shell"]
 id = "shell-locations"
 name = "shell script locations"
 language = "fail"
-entry = "shell scripts must live under scripts/ or containers/; move this file."
+entry = "shell scripts must live under scripts/, examples/ or containers/; move this file."
 files = '\.sh$'
-exclude = '^(scripts|containers)/'
+exclude = '^(scripts|examples|containers)/'
 
 [[repos.hooks]]
 id = "config-locations"
@@ -103,4 +103,4 @@ name = "layout"
 language = "fail"
 entry = "move this file into an allowed top-level folder."
 files = '/'
-exclude = '^(src|tests|ci|config|assets|pipelines|scripts|containers|reports|docs|artifacts/fineweb|artifacts/wikipedia|\.github)/'
+exclude = '^(src|tests|ci|config|assets|examples|scripts|containers|reports|docs|artifacts/fineweb|artifacts/wikipedia|\.github)/'
