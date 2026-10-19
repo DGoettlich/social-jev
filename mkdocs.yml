@@ -1,7 +1,7 @@
 site_name: SocialJev
 site_description: Classification foundation models for the social sciences.
 site_url: https://social-jev.github.io/docs/
-repo_url: https://github.com/DGoettlich/social-jev
+repo_url: https://github.com/social-jev/social-jev
 repo_name: GitHub
 edit_uri: ''
 copyright: SocialJev · Daniel Goettlich and Elliott Ash

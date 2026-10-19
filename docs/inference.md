@@ -123,7 +123,7 @@ For an incremental workload, the application controls when inputs are loaded, ho
 
 SocialJev moves its own encoding and decoding off the caller's event-loop thread. Other loading or processing performed by the application needs to be arranged so it can overlap inference too.
 
-The repository's [Wikipedia](https://github.com/DGoettlich/social-jev/blob/main/scripts/wikipedia.py) and [FineWeb](https://github.com/DGoettlich/social-jev/blob/main/scripts/fineweb.py) runs provide concrete references for larger concurrent workloads. They include benchmark instrumentation and prepare their input collections before timed inference; they are not streaming-inference examples.
+The repository's [Wikipedia](https://github.com/social-jev/social-jev/blob/main/scripts/wikipedia.py) and [FineWeb](https://github.com/social-jev/social-jev/blob/main/scripts/fineweb.py) runs provide concrete references for larger concurrent workloads. They include benchmark instrumentation and prepare their input collections before timed inference; they are not streaming-inference examples.
 
 ## Configure execution
 
