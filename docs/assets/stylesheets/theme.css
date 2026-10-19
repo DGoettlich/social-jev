@@ -48,7 +48,8 @@
 .md-nav__item--section > .md-nav__link { font: 500 1.05rem "Newsreader", Georgia, serif; color: var(--docs-ink); margin-top: 1.3rem; }
 .md-nav__link { padding: .35rem .65rem; margin-top: 0; }
 .md-nav__link--active { background: #e7eee4; border-left: 2px solid var(--docs-forest); border-radius: .15rem; color: var(--docs-forest); }
-.md-nav--secondary > .md-nav__title { background: none; box-shadow: none; font: 500 1rem "Newsreader", Georgia, serif; padding: .8rem .65rem; }
+.md-nav--secondary > .md-nav__title { position: static; height: auto; background: none; box-shadow: none; font: 500 1rem/1.4 "Newsreader", Georgia, serif; margin-bottom: .5rem; padding: .4rem .65rem; }
+.md-nav--secondary .md-nav__link { line-height: 1.4; }
 .docs-version { padding: 0 .65rem .5rem; }
 .docs-version label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 .docs-version select { color: var(--docs-ink); background: #edf3ec; border: 1px solid #a6bcb0; border-radius: .2rem; padding: .4rem .6rem; font: inherit; font-size: .8rem; max-width: 100%; }
