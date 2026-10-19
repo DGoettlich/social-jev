@@ -45,15 +45,15 @@ Transport
 
 ## Sustained workloads with the SocialJev package
 
-The package provides the same typed interface across inference backends. Its default backend is Transformers; for larger sustained workloads we recommend using SocialJev models via the integration with vLLM, which is optimized for fast inference.
+The package provides the same typed interface across inference backends. For larger sustained workloads, its optional vLLM integration is optimized for fast inference.
 
-For Transformers-only inference through the package, install it from PyPI:
+The standard PyPI installation uses Transformers:
 
 ```bash
 uv pip install social-jev
 ```
 
-For larger workloads, install the optional vLLM dependencies:
+To include the vLLM dependencies:
 
 ```bash
 uv pip install "social-jev[vllm]"
