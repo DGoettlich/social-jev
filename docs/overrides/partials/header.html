@@ -1,0 +1,19 @@
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <label class="md-header__button md-icon" for="__drawer" aria-label="Open navigation">
+      {% include ".icons/material/menu.svg" %}
+    </label>
+    <a class="docs-brand" href="{{ nav.homepage.url | url }}">SocialJev</a>
+    <span class="docs-badge">Alpha</span>
+    <span class="docs-header-label">Documentation</span>
+    <div class="docs-header-spacer"></div>
+    <label class="md-header__button md-icon" for="__search" aria-label="Search documentation">
+      {% include ".icons/material/magnify.svg" %}
+    </label>
+    {% include "partials/search.html" %}
+    <a class="docs-github" href="{{ config.repo_url }}">
+      <span class="md-icon">{% include ".icons/fontawesome/brands/github.svg" %}</span> GitHub
+    </a>
+    <a class="docs-project" href="https://social-jev.github.io/">Project website</a>
+  </nav>
+</header>

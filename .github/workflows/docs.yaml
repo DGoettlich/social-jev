@@ -1,0 +1,54 @@
+name: Documentation
+
+on:
+  pull_request:
+    paths: ['docs/**', 'src/**', 'mkdocs.yml', 'pyproject.toml', 'uv.lock', '.github/workflows/docs.yaml']
+  push:
+    branches: [main]
+    tags: ['v*']
+    paths: ['docs/**', 'src/**', 'mkdocs.yml', 'pyproject.toml', 'uv.lock', '.github/workflows/docs.yaml']
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@cec208311dfd045dd5311c1add060b2062131d57 # v8.0.0
+        with:
+          python-version: '3.12'
+          enable-cache: false
+      - run: uv sync --locked --group docs
+      - run: uv run --group docs mkdocs build --strict --site-dir site
+        env:
+          DOCS_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
+      - run: uv run --group docs python -m pytest tests/e2e/test_documentation.py --no-cov
+
+  publish-request:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify release belongs to main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor HEAD origin/main
+      - name: Request website documentation publication
+        env:
+          GH_TOKEN: ${{ secrets.WEBSITE_PUBLISH_TOKEN }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo 'Configure WEBSITE_PUBLISH_TOKEN with Contents:write on social-jev/social-jev.github.io.' >&2
+            exit 1
+          fi
+          gh api --method POST repos/social-jev/social-jev.github.io/dispatches \
+            -f event_type=package-docs -f "client_payload[version]=$VERSION"

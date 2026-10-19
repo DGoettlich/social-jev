@@ -1,0 +1,50 @@
+site_name: SocialJev
+site_description: Classification foundation models for the social sciences.
+site_url: https://social-jev.github.io/docs/
+repo_url: https://github.com/DGoettlich/social-jev
+repo_name: GitHub
+edit_uri: ''
+copyright: SocialJev · Daniel Goettlich and Elliott Ash
+hooks:
+  - docs/hooks.py
+exclude_docs: |
+  hooks.py
+  overrides/
+theme:
+  name: material
+  custom_dir: docs/overrides
+  font: false
+  icon:
+    logo: material/book-open-page-variant-outline
+  palette:
+    primary: custom
+    accent: custom
+  features:
+    - navigation.sections
+    - navigation.top
+    - toc.follow
+    - search.highlight
+    - content.code.copy
+plugins:
+  - search
+markdown_extensions:
+  - admonition
+  - attr_list
+  - toc:
+      title: On this page
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+      auto_title: true
+extra_css:
+  - assets/stylesheets/theme.css
+extra_javascript:
+  - assets/javascripts/versions.js
+extra:
+  generator: false
+nav:
+  - Getting started: index.md
+  - Concepts: concepts.md
+  - Inference: inference.md
+  - API reference: api.md

@@ -1,6 +1,6 @@
 [project]
 name = "social-jev"
-version = "0.1.0a2"
+version = "0.1.0a3"
 description = "Jev-like classification foundation models for the social sciences"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -15,6 +15,7 @@ vllm = ["vllm==0.31.0", "httpx"]
 social_jev = "social_jev.vllm.plugin:register"
 
 [dependency-groups]
+docs = ["mkdocs-material"]
 benchmark = [
     "datasets",
     "httpx",
