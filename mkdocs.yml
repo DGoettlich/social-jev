@@ -11,6 +11,7 @@ exclude_docs: |
   hooks.py
   overrides/
 theme:
+  favicon: assets/images/favicon.png
   name: material
   custom_dir: docs/overrides
   font: false
