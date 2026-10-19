@@ -123,7 +123,7 @@ For an incremental workload, the application controls when inputs are loaded, ho
 
 SocialJev moves its own encoding and decoding off the caller's event-loop thread. Other loading or processing performed by the application needs to be arranged so it can overlap inference too.
 
-The repository's [Wikipedia](https://github.com/social-jev/social-jev/blob/main/scripts/wikipedia.py) and [FineWeb](https://github.com/social-jev/social-jev/blob/main/scripts/fineweb.py) runs provide concrete references for larger concurrent workloads. They include benchmark instrumentation and prepare their input collections before timed inference; they are not streaming-inference examples.
+The repository's [Wikipedia](https://github.com/social-jev/social-jev/blob/main/examples/wikipedia.py) and [FineWeb](https://github.com/social-jev/social-jev/blob/main/examples/fineweb.py) runs provide concrete references for larger concurrent workloads. They include benchmark instrumentation and prepare their input collections before timed inference; they are not streaming-inference examples.
 
 ## Configure execution
 
@@ -210,9 +210,3 @@ VLLM_BATCH_INVARIANT=1 uv run python inference.py
 ```
 
 The setting reaches both local vLLM and a managed server. It has hardware and operation restrictions, remains a beta feature, and can affect performance. See [vLLM's batch-invariance documentation](https://docs.vllm.ai/en/v0.31.0/features/batch_invariance/).
-
-### What is currently established
-
-Our backend checks establish agreement within numerical tolerance, not an exact reproducibility guarantee across batch sizes or concurrent schedules. End-to-end batch invariance of the SocialJev backbone and custom linear/MLP head has not yet been validated.
-
-For a reproducible run, retain the requests and supplied options, select a fixed model revision with `revision`, and record the package/software versions, hardware, precision, and parallelism settings. vLLM's reproducibility scope is the same hardware and vLLM version; it does not promise identical results across different environments. See [vLLM's reproducibility guidance](https://docs.vllm.ai/en/v0.31.0/usage/reproducibility/).

@@ -1,6 +1,6 @@
 """Benchmark async SocialJev inference on FineWeb passages.
 
-Run with ``uv run --group benchmark --extra vllm python scripts/fineweb.py --help``.
+Run with ``uv run --group benchmark --extra vllm python examples/fineweb.py --help``.
 Dataset preparation and model startup are excluded from inference timing.
 """
 
