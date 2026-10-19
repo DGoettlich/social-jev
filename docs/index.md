@@ -45,25 +45,34 @@ Transport
 
 ## Sustained workloads with the SocialJev package
 
-The package provides the same typed interface across inference backends. Its default backend is Transformers; for larger sustained workloads we recommend using SocialJev models via the integration with vllm, which is optimized for fast inference.
+The package provides the same typed interface across inference backends. For larger sustained workloads, its optional vLLM integration is optimized for fast inference.
 
-To use SocialJev models with our package, first install the package from PyPI:
+The standard PyPI installation uses Transformers:
 
 ```bash
 uv pip install social-jev
 ```
 
-then load the model, define a query, and submit it to the model. The package provides two methods for submitting queries:
+To include the vLLM dependencies:
+
+```bash
+uv pip install "social-jev[vllm]"
+```
+
+Then load the model, define a query, and submit it to the model. The package provides two methods for submitting queries:
 
 1. **.query()** submits queries synchronously
 2. **.aquery()** submits them asynchronously
 
-We provide more details on the differences between the methods and different execution backends on the [inference page](inference.md). The example below uses the synchronous method, which you can use like so:
+We provide more details on the differences between the methods and different execution backends on the [inference page](inference.md). The example below uses vLLM with the synchronous method, which you can use like so:
 
 ```python
 from social_jev import Query, Request, SocialJev
 
-model = SocialJev.from_pretrained("social-jev/social-jev-0.6B-preview")
+model = SocialJev.from_pretrained(
+    "social-jev/social-jev-0.6B-preview",
+    backend="vllm",
+)
 request = Request(
     state="The council expanded the bus network.",
     queries=[
@@ -74,9 +83,12 @@ request = Request(
     ],
 )
 
-results = model.query(request)
-print(results[0][0].choice)
-print(results[0][0].probabilities)
+try:
+    results = model.query(request)
+    print(results[0][0].choice)
+    print(results[0][0].probabilities)
+finally:
+    model.stop()
 ```
 
 The returned results have the same structure as in the Transformers example above.
