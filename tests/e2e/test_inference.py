@@ -153,9 +153,10 @@ def test_positional_queries_round_trip_and_submit(checkpoint):
         assert restored.queries[0].text == "Q"
         expected = model.query(Request(state="S", queries=[Query(text="Q", options=["A", "B"])]))
         assert model.query(restored) == expected
-        for incomplete in (Query("Q"), Query("Q", options=None)):
-            restored_query = Query.model_validate_json(incomplete.model_dump_json())
-            with pytest.raises(ValueError, match="Query options are required for inference"):
-                model.query(Request(state="S", queries=[restored_query]))
+        for query_without_options in (Query("Q"), Query("Q", options=None)):
+            item = Request(state="S", queries=[query_without_options])
+            restored = Request.model_validate_json(item.model_dump_json())
+            assert restored == item
+            assert restored.queries[0].options is None
     finally:
         model.stop()

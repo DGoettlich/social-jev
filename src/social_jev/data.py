@@ -29,11 +29,8 @@ class Sample:
         """Format a complete typed request into messages."""
         messages = [{"role": "state", "content": request.state}]
         for query in request.queries:
-            if query.options is None:
-                message = "Query options are required for inference"
-                raise ValueError(message)
             messages.append({"role": "query", "content": query.text})
-            messages.extend({"role": "option", "content": option} for option in query.options)
+            messages.extend({"role": "option", "content": option} for option in query.options or [])
         return cls(messages)
 
 
@@ -149,13 +146,13 @@ class Encoded:
         for request in self.requests:
             answers = []
             for query in request.queries:
-                assert query.options is not None
-                logits = torch.tensor([next(rows) for _ in query.options], dtype=torch.float32)
+                options = query.options or []
+                logits = torch.tensor([next(rows) for _ in options], dtype=torch.float32)
                 probabilities = logits.softmax(0)
                 answers.append(
                     Result(
-                        choice=query.options[int(probabilities.argmax())],
-                        probabilities=dict(zip(query.options, probabilities.tolist(), strict=True)),
+                        choice=options[int(probabilities.argmax())],
+                        probabilities=dict(zip(options, probabilities.tolist(), strict=True)),
                     )
                 )
             documents.append(answers)

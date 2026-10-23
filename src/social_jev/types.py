@@ -9,7 +9,6 @@ class Query(BaseModel):
     Args:
         text: Question describing the classification task.
         options: Nonempty list of distinct candidate answers, or None (default).
-            Candidate answers are required when submitting the query for inference.
 
     Examples:
         >>> query = Query("Policy area?", options=["Transport", "Education"])

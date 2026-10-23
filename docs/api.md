@@ -134,7 +134,6 @@ query = Query("Policy area?", options=["Transport", "Education"])
 - `options: list[str] | None`: a nonempty list of distinct candidate answers; defaults to `None`.
 
 `Query("Policy area?")` is equivalent to `Query(text="Policy area?", options=None)`.
-The query can be constructed without options, but inference currently requires them.
 
 ## Request
 

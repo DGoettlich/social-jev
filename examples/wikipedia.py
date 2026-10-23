@@ -212,8 +212,7 @@ async def main() -> None:
             )
         )
         async with Telemetry(model.engine.url, output) as telemetry:
-            assert QUERY.options is not None
-            before = await telemetry.wait_completed(len(QUERY.options))
+            before = await telemetry.wait_completed(len(QUERY.options or []))
             telemetry.mark("start")
             results = await SpeedBench(model, args.batch_size, args.concurrency).run(requests)
             telemetry.mark("end")
