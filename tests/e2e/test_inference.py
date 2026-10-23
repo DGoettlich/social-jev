@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 import torch
+from pydantic import ValidationError
 from transformers import AutoTokenizer
 
 from social_jev import Query, Request, SocialJev
@@ -135,5 +136,27 @@ def test_transformers_loading_kwargs_reach_model(checkpoint, monkeypatch):
         assert model.engine.model.config.backbone_config.pad_token_id is None
         assert model.engine.pad_id == model.engine.tokenizer.pad_token_id == 0
         assert len(model.query(requests())) == 2
+    finally:
+        model.stop()
+
+
+def test_positional_queries_round_trip_and_submit(checkpoint):
+    for options in ([], ["A", "A"]):
+        with pytest.raises(ValidationError):
+            Query("Q", options=options)
+    model = SocialJev.from_pretrained(checkpoint)
+    query = Query("Q", options=["A", "B"])
+    item = Request(state="S", queries=[query])
+    restored = Request.model_validate_json(item.model_dump_json())
+    try:
+        assert restored == item
+        assert restored.queries[0].text == "Q"
+        expected = model.query(Request(state="S", queries=[Query(text="Q", options=["A", "B"])]))
+        assert model.query(restored) == expected
+        for query_without_options in (Query("Q"), Query("Q", options=None)):
+            item = Request(state="S", queries=[query_without_options])
+            restored = Request.model_validate_json(item.model_dump_json())
+            assert restored == item
+            assert restored.queries[0].options is None
     finally:
         model.stop()

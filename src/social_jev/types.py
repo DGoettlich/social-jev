@@ -4,16 +4,18 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class Query(BaseModel):
-    """A classification question with candidate answers.
+    """A question with optional candidate answers.
 
     Args:
         text: Question describing the classification task.
-        options: Nonempty list of distinct candidate answers.
+        options: Nonempty list of distinct candidate answers, or None (default).
 
     Examples:
-        >>> query = Query(text="Policy area?", options=["Transport", "Education"])
+        >>> query = Query("Policy area?", options=["Transport", "Education"])
         >>> query.options[0]
         'Transport'
+        >>> Query("Policy area?").options is None
+        True
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -21,13 +23,17 @@ class Query(BaseModel):
 
     text: str
     """Question defining the classification task."""
-    options: list[str] = Field(min_length=1)
-    """Distinct candidate answers in their supplied order."""
+    options: list[str] | None = Field(default=None, min_length=1)
+    """Distinct candidate answers in their supplied order, or None if omitted."""
+
+    def __init__(self, text: str, **data: object) -> None:
+        super().__init__(text=text, **data)
 
     @model_validator(mode="after")
     def validate_options(self):
         """Require distinct candidate options."""
-        assert len(self.options) == len(set(self.options))
+        if self.options is not None:
+            assert len(self.options) == len(set(self.options))
         return self
 
 
