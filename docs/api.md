@@ -127,11 +127,14 @@ With Transformers, this releases the engine's model reference; calling it is not
 ## Query
 
 ```python
-query = Query(text="Policy area?", options=["Transport", "Education"])
+query = Query("Policy area?", options=["Transport", "Education"])
 ```
 
-- `text: str`: the question defining the task.
-- `options: list[str]`: a nonempty list of distinct candidate answers.
+- `text: str`: the question defining the task, supplied positionally or as `text=...`.
+- `options: list[str] | None`: a nonempty list of distinct candidate answers; defaults to `None`.
+
+`Query("Policy area?")` is equivalent to `Query(text="Policy area?", options=None)`.
+The query can be constructed without options, but inference currently requires them.
 
 ## Request
 
